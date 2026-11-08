@@ -1,30 +1,35 @@
 <template>
-  <div class="bg-white rounded shadow p-6">
-    <h2 class="text-xl font-bold mb-2 text-gray-800">Audit trail</h2>
-    <p class="text-sm text-gray-500 mb-4">
-      Admin only. Tip: in Chat, admins can prefix a question with <code class="bg-gray-100 px-1 rounded">audit: </code>
-      (e.g. <code class="bg-gray-100 px-1 rounded">audit: uploads per day</code>).
+  <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-6">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="text-xl font-bold text-slate-800">Audit trail</h2>
+      <span class="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-medium">{{ events.length }} event{{ events.length === 1 ? '' : 's' }}</span>
+    </div>
+    <p class="text-sm text-slate-500 mb-4">
+      Admin only. Tip: in Chat, admins can prefix a question with <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">audit: </code>
+      (e.g. <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">audit: uploads per day</code>).
     </p>
     <div class="flex flex-wrap gap-2 mb-4">
-      <input v-model="filters.action" placeholder="Action filter" class="border rounded px-3 py-2 text-sm" />
-      <input v-model="filters.account_id" placeholder="Account ID" class="border rounded px-3 py-2 text-sm" />
-      <input v-model.number="filters.limit" type="number" min="1" class="border rounded px-3 py-2 text-sm w-28" />
-      <button @click="load" class="bg-blue-600 text-white rounded px-4 py-2 text-sm hover:bg-blue-700">Load</button>
+      <input v-model="filters.action" placeholder="Action filter" aria-label="Action filter" class="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-indigo-500" />
+      <input v-model="filters.account_id" placeholder="Account ID" aria-label="Account ID" class="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-indigo-500" />
+      <input v-model.number="filters.limit" type="number" min="1" aria-label="Limit" class="border border-slate-200 rounded-lg px-3 py-2 text-sm w-28 focus:border-indigo-500" />
+      <button @click="load" class="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-indigo-700 transition-colors font-medium">Load</button>
     </div>
-    <p v-if="error" class="text-sm text-red-600 mb-2">{{ error }}</p>
+    <p v-if="error" class="text-sm text-red-600 mb-2" role="alert">{{ error }}</p>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
-      <thead><tr class="text-left text-gray-500 border-b"><th class="py-2">Time</th><th>Actor</th><th>Action</th><th>Scope</th><th>Detail</th></tr></thead>
+      <thead><tr class="text-left text-slate-400 border-b border-slate-100"><th class="py-2 font-medium">Time</th><th class="font-medium">Actor</th><th class="font-medium">Action</th><th class="font-medium">Scope</th><th class="font-medium">Detail</th></tr></thead>
       <tbody>
-        <tr v-for="(e, i) in events" :key="i" class="border-b">
-          <td class="py-2">{{ e.ts }}</td>
-          <td>{{ e.actor }}</td>
-          <td>{{ e.action }}</td>
-          <td>{{ e.scope }}</td>
-          <td class="max-w-xs truncate">{{ e.detail }}</td>
+        <tr v-for="(e, i) in events" :key="i" class="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors">
+          <td class="py-2.5 text-slate-500 whitespace-nowrap">{{ e.ts }}</td>
+          <td class="text-slate-700">{{ e.actor }}</td>
+          <td><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">{{ e.action }}</span></td>
+          <td class="text-slate-500">{{ e.scope }}</td>
+          <td class="max-w-xs truncate text-slate-500">{{ e.detail }}</td>
         </tr>
       </tbody>
     </table>
-    <p v-if="!events.length && !error" class="text-sm text-gray-500 mt-2">No events.</p>
+    </div>
+    <p v-if="!events.length && !error" class="text-sm text-slate-400 mt-3">No events match these filters.</p>
   </div>
 </template>
 

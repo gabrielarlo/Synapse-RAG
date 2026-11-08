@@ -1,18 +1,24 @@
 <template>
-  <div class="bg-white rounded shadow p-6">
-    <h2 class="text-xl font-bold mb-4 text-gray-800">Accounts</h2>
+  <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold text-slate-800">Accounts</h2>
+      <span class="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-medium">{{ accounts.length }} total</span>
+    </div>
     <form @submit.prevent="create" class="flex gap-2 mb-4">
-      <input v-model="name" placeholder="New account name" class="border rounded px-3 py-2 flex-1" required />
-      <button class="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">Create</button>
+      <input v-model="name" placeholder="New account name" aria-label="New account name" class="border border-slate-200 rounded-lg px-3 py-2 flex-1 focus:border-indigo-500" required />
+      <button class="bg-indigo-600 text-white rounded-lg px-4 py-2 hover:bg-indigo-700 transition-colors font-medium">Create</button>
     </form>
-    <p v-if="error" class="text-sm text-red-600 mb-2">{{ error }}</p>
-    <ul class="divide-y">
-      <li v-for="a in accounts" :key="a.id" class="py-2 flex justify-between text-sm">
-        <span class="font-medium">{{ a.name }}</span>
-        <span class="text-gray-400">#{{ a.id }}</span>
+    <p v-if="error" class="text-sm text-red-600 mb-2" role="alert">{{ error }}</p>
+    <ul class="divide-y divide-slate-100">
+      <li v-for="a in accounts" :key="a.id" class="py-2.5 flex items-center justify-between text-sm gap-3">
+        <span class="flex items-center gap-2.5 min-w-0">
+          <span class="grid place-items-center w-7 h-7 rounded-full bg-violet-100 text-violet-700 text-xs font-bold shrink-0" aria-hidden="true">{{ (a.name || '?').slice(0, 1).toUpperCase() }}</span>
+          <span class="font-medium text-slate-700 truncate">{{ a.name }}</span>
+        </span>
+        <span class="text-xs text-slate-400 font-mono shrink-0">#{{ a.id }}</span>
       </li>
     </ul>
-    <p v-if="!accounts.length && !error" class="text-sm text-gray-500">No accounts.</p>
+    <p v-if="!accounts.length && !error" class="text-sm text-slate-400 mt-2">No accounts yet — create one above.</p>
   </div>
 </template>
 

@@ -25,12 +25,14 @@ External `POST /ext/faq`: key/secret auth → stateless RAG on own account only 
 - Python: type hints on public functions, pydantic schemas at trust boundaries, raw parameterized SQL (no string-built queries).
 - One RLS `SET LOCAL app.current_account` per scoped request; sessions bind `(user, account_id)`; `last_active` touches on inbound user messages only after the TTL check.
 - Vue: composition API, one view per resource, all API calls through `src/api.js`.
-- UI iteration: `npm run dev` in `ui/` for hot reload; after editing UI, rebuild the
-  served image with `docker compose up -d --build ui` (compose serves a static
-  build — edits are not picked up until rebuilt).
+- UI iteration: `npm run dev` in `ui/` for hot reload; after ANY `ui/` edit you MUST
+  run `docker compose up -d --build ui` (compose serves a static build — edits
+  are not picked up until rebuilt). Task is not done until the rebuilt `ui`
+  container is Up.
 
 ## Gates (run before done)
 
 - `.venv/bin/python -m pytest tests/ -q` — full suite green.
 - `docker compose config` — compose file valid.
+- Any `ui/` edit → `docker compose up -d --build ui` + container Up (required, not optional).
 - New endpoint or behavior → test asserting it, including the 401/403/422/429 cases.

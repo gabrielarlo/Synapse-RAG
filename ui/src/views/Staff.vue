@@ -1,41 +1,48 @@
 <template>
   <div class="grid gap-6 md:grid-cols-2">
-    <div class="bg-white rounded shadow p-6">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">Users</h2>
+    <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-slate-800">Users</h2>
+        <span class="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-medium">{{ users.length }} total</span>
+      </div>
       <form @submit.prevent="createUser" class="space-y-2 mb-4">
-        <input v-model="form.username" placeholder="Username" class="w-full border rounded px-3 py-2" required />
-        <input v-model="form.password" type="password" placeholder="Password" class="w-full border rounded px-3 py-2" required />
-        <select v-model="form.role" class="w-full border rounded px-3 py-2">
+        <input v-model="form.username" placeholder="Username" aria-label="Username" class="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-indigo-500" required />
+        <input v-model="form.password" type="password" placeholder="Password" aria-label="Password" autocomplete="new-password" class="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-indigo-500" required />
+        <select v-model="form.role" aria-label="Role" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500">
           <option value="staff">staff</option>
           <option value="admin">admin</option>
         </select>
-        <button class="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">Create user</button>
+        <button class="bg-indigo-600 text-white rounded-lg px-4 py-2 hover:bg-indigo-700 transition-colors font-medium">Create user</button>
       </form>
-      <ul class="divide-y text-sm">
-        <li v-for="u in users" :key="u.id || u.username" class="py-2 flex justify-between">
-          <span>{{ u.username }} <span class="text-gray-400">({{ u.role || u.id }})</span></span>
-          <span class="text-gray-400">id: {{ u.id }}</span>
+      <ul class="divide-y divide-slate-100 text-sm">
+        <li v-for="u in users" :key="u.id || u.username" class="py-2.5 flex items-center justify-between gap-3">
+          <span class="flex items-center gap-2.5 min-w-0">
+            <span class="grid place-items-center w-7 h-7 rounded-full bg-violet-100 text-violet-700 text-xs font-bold shrink-0" aria-hidden="true">{{ (u.username || '?').slice(0, 1).toUpperCase() }}</span>
+            <span class="text-slate-700 font-medium truncate">{{ u.username }}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full font-medium" :class="(u.role || '') === 'admin' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'">{{ u.role || u.id }}</span>
+          </span>
+          <span class="text-xs text-slate-400 font-mono shrink-0">id: {{ u.id }}</span>
         </li>
       </ul>
     </div>
-    <div class="bg-white rounded shadow p-6">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">Assign staff to account</h2>
+    <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-6 h-fit">
+      <h2 class="text-xl font-bold mb-4 text-slate-800">Assign staff to account</h2>
       <div class="space-y-2">
-        <select v-model="accountId" class="w-full border rounded px-3 py-2">
+        <select v-model="accountId" aria-label="Account" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500">
           <option value="">Select account</option>
           <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
         </select>
-        <select v-model="userId" class="w-full border rounded px-3 py-2">
+        <select v-model="userId" aria-label="User" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500">
           <option value="">Select user</option>
           <option v-for="u in users" :key="u.id || u.username" :value="u.id">{{ u.username }}</option>
         </select>
         <div class="flex gap-2">
-          <button @click="assign" class="bg-green-600 text-white rounded px-4 py-2 hover:bg-green-700">Assign</button>
-          <button @click="unassign" class="bg-red-600 text-white rounded px-4 py-2 hover:bg-red-700">Unassign</button>
+          <button @click="assign" class="bg-emerald-600 text-white rounded-lg px-4 py-2 hover:bg-emerald-700 transition-colors font-medium">Assign</button>
+          <button @click="unassign" class="bg-red-600/90 text-white rounded-lg px-4 py-2 hover:bg-red-700 transition-colors font-medium">Unassign</button>
         </div>
       </div>
-      <p v-if="error" class="mt-3 text-sm text-red-600">{{ error }}</p>
-      <p v-if="msg" class="mt-3 text-sm text-green-600">{{ msg }}</p>
+      <p v-if="error" class="mt-3 text-sm text-red-600" role="alert">{{ error }}</p>
+      <p v-if="msg" class="mt-3 text-sm text-green-600" role="status">{{ msg }}</p>
     </div>
   </div>
 </template>
