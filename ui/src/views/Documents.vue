@@ -26,7 +26,9 @@
         <tr v-for="d in docs" :key="d.id" class="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors">
           <td class="py-2.5 font-medium text-slate-700">{{ d.filename }}</td>
           <td class="text-slate-500">{{ d.scope || (d.account_id || 'internal') }}</td>
-          <td><span class="px-2 py-0.5 rounded-full text-xs font-medium" :class="d.status === 'ready' ? 'bg-emerald-50 text-emerald-700' : d.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'">{{ d.status }}</span></td>
+          <td><span class="px-2 py-0.5 rounded-full text-xs font-medium" :class="d.status === 'ready' ? 'bg-emerald-50 text-emerald-700' : d.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'">{{ d.status }}</span>
+            <p v-if="d.status === 'failed'" class="text-xs text-red-600 mt-1 max-w-xs truncate" :title="d.error || 'Processing failed with no further detail.'">{{ d.error || 'Processing failed with no further detail.' }}</p>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -35,19 +37,51 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { api } from '../api.js'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { api, currentRole } from '../api.js'
 
 const accounts = ref([])
 const docs = ref([])
 const accountId = ref('')
-const internal = ref(false)
+const internal = ref(currentRole() !== 'staff')
 const file = ref(null)
 const error = ref('')
 const msg = ref('')
+let pollTimer = null
 
 function scopeParams() {
   return internal.value ? { internal: true } : accountId.value ? { account_id: accountId.value } : null
+}
+
+function isPending() {
+  return docs.value.some((d) => d.status !== 'ready' && d.status !== 'failed')
+}
+
+function stopPoll() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+async function quietLoad() {
+  const params = scopeParams()
+  if (!params) return
+  try {
+    const { data } = await api.listDocuments(params)
+    docs.value = data
+  } catch { /* keep last state; next tick retries */ }
+  if (!isPending()) stopPoll()
+}
+
+function startPoll() {
+  stopPoll()
+  pollTimer = setInterval(quietLoad, 3000)
+}
+
+function syncPoll() {
+  if (isPending()) startPoll()
+  else stopPoll()
 }
 
 async function load() {
@@ -60,6 +94,7 @@ async function load() {
   try {
     const { data } = await api.listDocuments(params)
     docs.value = data
+    syncPoll()
   } catch (e) {
     error.value = e.response?.data?.detail || 'Failed to load documents.'
   }
@@ -82,6 +117,7 @@ async function upload() {
     msg.value = `Queued (job ${data.job_id}, ${data.status}).`
     file.value = null
     await load()
+    if (isPending()) startPoll()
   } catch (e) {
     error.value = e.response?.data?.detail || 'Upload failed.'
   }
@@ -92,5 +128,13 @@ onMounted(async () => {
     const { data } = await api.listAccounts()
     accounts.value = data
   } catch { /* scoped users may still chat; ignore */ }
+  if (scopeParams()) await load()
 })
+
+watch([accountId, internal], async () => {
+  stopPoll()
+  await load()
+})
+
+onUnmounted(stopPoll)
 </script>

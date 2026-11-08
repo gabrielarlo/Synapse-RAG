@@ -5,7 +5,10 @@ from .store import Chunk, Scope
 from .triage import Triage, parse_triage
 
 
-def chunk_text(text: str, size: int = 1000, overlap: int = 100) -> list[str]:
+def chunk_text(text: str, size: int = 250, overlap: int = 50) -> list[str]:
+    # Small chunks: a 3B generator loses needles in 1000-word walls, and
+    # oversized chunks dilute embedding similarity. ~250 words keeps top-k
+    # focused and the prompt short.
     words = text.split()
     chunks, i = [], 0
     while i < len(words):

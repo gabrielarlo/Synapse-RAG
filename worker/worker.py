@@ -21,13 +21,25 @@ UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/data/uploads")
 
 
 def file_text(document_id: str, filename: str) -> str:
-    # v1: plain-text uploads; binary formats are read as text with errors ignored
-    # shortcut: only utf-8 text extraction, upgrade to format parsers when needed
+    # v1: plain-text uploads read as-is; PDFs get real text extraction.
+    # Raw-decoding a PDF yields FlateDecode garbage retrievers can't match
+    # and generators can't answer from.
+    # shortcut: non-PDF binary formats still read as text.
     for cand in (os.path.join(UPLOAD_DIR, document_id),
                  os.path.join(UPLOAD_DIR, document_id + "_" + filename)):
         if os.path.exists(cand):
+            if filename.lower().endswith(".pdf"):
+                try:
+                    from pypdf import PdfReader
+                    text = "\n".join((p.extract_text() or "")
+                                     for p in PdfReader(cand).pages)
+                    if text.strip():
+                        return text.replace("\x00", "")
+                except Exception:  # noqa: BLE001 — fall back to raw decode
+                    pass
             with open(cand, "rb") as f:
-                return f.read().decode("utf-8", errors="ignore")
+                # PG text cannot store NUL, so strip it or chunk inserts fail
+                return f.read().decode("utf-8", errors="ignore").replace("\x00", "")
     return ""
 
 

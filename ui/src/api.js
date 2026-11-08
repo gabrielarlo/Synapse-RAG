@@ -40,6 +40,17 @@ client.interceptors.response.use(
   }
 )
 
+export function currentRole() {
+  try {
+    const t = localStorage.getItem('access_token')
+    if (!t) return ''
+    const payload = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return payload.role || ''
+  } catch {
+    return ''
+  }
+}
+
 export const api = {
   login: (username, password) =>
     client.post('/api/auth/login', { username, password }),

@@ -50,3 +50,30 @@ def test_chat_cross_account_question_without_leak(app_client):
                json={"account_id": app_client["a"]["id"],
                      "question": "globex secret pricing"})
     assert r.status_code == 200
+
+
+def test_chat_without_account_answers_from_internal_only(app_client):
+    c = app_client["client"]
+    s = app_client["app"].state.ctx["store"]
+    one, _ = _seed(s, app_client["a"]["id"], app_client["b"]["id"])
+    # store level: internal-only scope sees internal chunks, never account ones
+    texts = [x["content"] for x in s.search(
+        one, Scope(user=None, account_id=None, caller="internal",
+                   is_admin=False))]
+    assert any("internal" in t for t in texts)
+    assert not any("acme" in t or "globex" in t for t in texts)
+    # api level: omitted account_id answers instead of 422, for both roles
+    for username, password in (("admin", "adminpass"), ("staff", "staffpass")):
+        tok = login(c, username, password)
+        r = c.post("/api/chat", headers=authz(tok),
+                   json={"question": "holiday rota"})
+        assert r.status_code == 200, r.text
+        assert r.json()["session_id"]
+    # internal session is bound: reuse with an account scope is rejected
+    tok = login(c, "admin", "adminpass")
+    sid = c.post("/api/chat", headers=authz(tok),
+                 json={"question": "hi"}).json()["session_id"]
+    r = c.post("/api/chat", headers=authz(tok),
+               json={"account_id": app_client["a"]["id"],
+                     "question": "hijack?", "session_id": sid})
+    assert r.status_code == 403

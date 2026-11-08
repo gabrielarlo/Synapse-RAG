@@ -35,7 +35,7 @@ class AssignIn(BaseModel):
 
 
 class ChatIn(BaseModel):
-    account_id: str
+    account_id: str | None = None
     question: str
     session_id: str | None = None
 

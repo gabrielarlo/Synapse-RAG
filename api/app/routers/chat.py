@@ -7,7 +7,7 @@ from ..audit import answer_audit
 from ..deps import authed, resolve_scope
 from ..rag import build_prompt, retrieve, triage_question
 from ..schemas import ChatIn, ChatOut
-from ..store import User
+from ..store import Scope, User
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 EXPIRY_NOTICE = (" Note: your previous session context expired after 30 minutes"
@@ -17,7 +17,12 @@ EXPIRY_NOTICE = (" Note: your previous session context expired after 30 minutes"
 @router.post("", response_model=ChatOut)
 def chat(body: ChatIn, request: Request, user: User = Depends(authed)):
     c = request.app.state.ctx
-    scope = resolve_scope(request, body.account_id, user)
+    if body.account_id is not None:
+        scope = resolve_scope(request, body.account_id, user)
+    else:
+        # omitted account = internal-only scope (never any account's content)
+        scope = Scope(user=user, account_id=None, caller="internal",
+                      is_admin=False)
 
     # audit: prefix check runs BEFORE triage, admin-only, never touches vectors
     if body.question.startswith("audit: "):

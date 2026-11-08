@@ -1,6 +1,8 @@
 """Minimal Ollama HTTP client (generation, embeddings, decision)."""
 from __future__ import annotations
 
+import json
+
 import httpx
 
 
@@ -27,15 +29,50 @@ class Ollama:
         return r.json().get("response", "")
 
     def decide(self, question: str) -> str:
-        # No "format": "json" — some runners reject it; the system prompt
-        # already constrains output and the caller falls back safely.
+        # Decision-capability models (e.g. d1) score typed questions via
+        # /v1/systemone instead of /api/generate. Returns JSON text so the
+        # caller's parse_triage fallback still applies.
+        # Server caps text+schema at 64 KiB (bytes); triage needs only the gist.
+        state = question.encode("utf-8")[:60000].decode("utf-8", "ignore")
         r = self._http.post(
-            f"{self.base}/api/generate",
-            json={"model": self.decision_model, "stream": False,
-                  "system": DECIDE_SYSTEM,
-                  "prompt": f"Question: {question}"})
+            f"{self.base}/v1/systemone",
+            json={"model": self.decision_model, "state": state,
+                  "questions": {
+                      "category": {
+                          "type": "choice",
+                          "instructions": "Which label best fits this question?",
+                          "criteria": {
+                              "general": "General question or small talk",
+                              "billing": "Payments, refunds, invoices",
+                              "technical": "Product use, errors, troubleshooting",
+                              "account": "Login, access, account settings",
+                              "complaint": "Dissatisfaction or formal grievance"}},
+                      "escalate": {
+                          "type": "noul",
+                          "instructions": "Should this be escalated to a human?",
+                          "criteria": {
+                              "true": ("Complaint, incident, billing dispute,"
+                                       " legal or safety issue, or likely"
+                                       " unanswerable from the docs"),
+                              "false": ("Routine question the knowledge base"
+                                        " can answer")}},
+                      "department": {
+                          "type": "choice",
+                          "instructions": "If escalated, which team owns it?",
+                          "criteria": {
+                              "support": "General customer support",
+                              "billing": "Payments and refunds team",
+                              "technical": "Engineering or product team"}}}})
         r.raise_for_status()
-        return r.json().get("response", "")
+        # Any 200 with an unexpected shape falls back safely instead of
+        # raising (parse_triage then applies its drift default).
+        a = r.json().get("answers", {}) or {}
+        cat = (a.get("category") or {}).get("choice") or "general"
+        esc = (a.get("escalate") or {}).get("noul", 0)
+        esc = esc if isinstance(esc, (int, float)) else 0
+        dep = (a.get("department") or {}).get("choice")
+        return json.dumps({"category": cat, "escalate": esc >= 0.5,
+                           "department": dep})
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         out: list[list[float]] = []
@@ -47,15 +84,6 @@ class Ollama:
             emb = j.get("embeddings", [[]])[0]
             out.append([float(x) for x in emb])
         return out
-
-
-DECIDE_SYSTEM = (
-    'Classify the user question for a support RAG system. Reply with JSON only:'
-    ' {"category": "<short label>", "escalate": <true|false>,'
-    ' "department": "<team or null>"}.'
-    ' Set escalate=true for complaints, incidents, billing disputes, legal or'
-    ' safety issues, or anything the knowledge base likely cannot answer.'
-)
 
 
 class FakeOllama:

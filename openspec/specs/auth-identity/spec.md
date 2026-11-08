@@ -41,12 +41,17 @@ The system SHALL support `admin` and `staff` roles where admins manage all tenan
 
 ### Requirement: Per-request scope resolution
 
-Every scoped request SHALL resolve exactly one explicit `account_id` (query/body param, required except for admins listing), verify the caller's membership for that account, and set it as the single RLS scope for the request; admins bypass membership via a separate policy but still pass an explicit `account_id` when acting within an account.
+Every scoped request SHALL resolve exactly one explicit `account_id` (query/body param, required except for admins listing), verify the caller's membership for that account, and set it as the single RLS scope for the request; admins bypass membership via a separate policy but still pass an explicit `account_id` when acting within an account. The chat endpoint is exempt: omitting `account_id` there resolves to the internal-only scope (internal documents, no account content).
 
 #### Scenario: Staff must name their account
 
 - **WHEN** a staff user calls a scoped endpoint without `account_id` or with an unassigned `account_id`
 - **THEN** the system responds 422 for the missing case and 403 for the unassigned case, performing no data access
+
+#### Scenario: Chat defaults to internal scope
+
+- **WHEN** a user posts a chat question without `account_id`
+- **THEN** the system answers from internal documents only and never exposes any account's content
 
 #### Scenario: Admin acts with explicit scope
 

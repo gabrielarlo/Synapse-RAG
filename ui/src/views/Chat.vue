@@ -9,6 +9,9 @@
         <option value="">Select account</option>
         <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
       </select>
+      <label class="flex items-center gap-1.5 text-sm text-slate-600">
+        <input type="checkbox" v-model="internal" class="w-4 h-4 accent-indigo-600" /> internal
+      </label>
       <button @click="newSession" class="bg-slate-100 rounded-lg px-4 py-2 text-sm hover:bg-slate-200 transition-colors">New session</button>
     </div>
     <div ref="thread" class="scroll-slim border border-slate-200 rounded-xl p-4 h-80 overflow-y-auto mb-4 space-y-4 bg-gradient-to-b from-slate-50 to-white">
@@ -38,7 +41,7 @@
       </div>
       <div v-if="!messages.length && !loading" class="text-center py-8">
         <svg viewBox="0 0 48 48" class="w-12 h-12 mx-auto mb-3 text-indigo-300" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12a6 6 0 0 1 6-6h20a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H20l-9 8V12Z"/><circle cx="18" cy="18" r="1.5" fill="currentColor"/><circle cx="25" cy="18" r="1.5" fill="currentColor"/><circle cx="32" cy="18" r="1.5" fill="currentColor"/></svg>
-        <p class="text-sm text-slate-400">Ask a question scoped to the selected account.</p>
+        <p class="text-sm text-slate-400">Ask a question scoped to the selected account, or internal when none is selected.</p>
       </div>
     </div>
     <form @submit.prevent="send" class="flex gap-2">
@@ -52,11 +55,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
-import { api } from '../api.js'
+import { ref, onMounted, nextTick, watch } from 'vue'
+import { api, currentRole } from '../api.js'
 
 const accounts = ref([])
 const accountId = ref('')
+const internal = ref(currentRole() !== 'staff')
 const sessionId = ref(null)
 const question = ref('')
 const messages = ref([])
@@ -75,8 +79,8 @@ function newSession() {
 
 async function send() {
   error.value = ''
-  if (!accountId.value) {
-    error.value = 'Select an account first.'
+  if (!accountId.value && !internal.value) {
+    error.value = 'Select an account or check internal.'
     return
   }
   const q = question.value
@@ -87,7 +91,7 @@ async function send() {
   try {
     const { data } = await api.chat({
       session_id: sessionId.value,
-      account_id: accountId.value,
+      account_id: internal.value ? null : accountId.value,
       question: q
     })
     sessionId.value = data.session_id
@@ -114,5 +118,10 @@ onMounted(async () => {
   } catch (e) {
     error.value = e.response?.data?.detail || 'Failed to load accounts.'
   }
+})
+
+// scope switch invalidates the bound session; start fresh instead of 403ing
+watch([accountId, internal], () => {
+  sessionId.value = null
 })
 </script>
