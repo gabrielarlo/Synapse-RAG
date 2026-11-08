@@ -1,0 +1,35 @@
+# All services except Ollama and PGSQL (external via .env URLs).
+name: synapse-rag
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - session-data:/data
+      - uploads-data:/data/uploads
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - uploads-data:/data/uploads
+
+  ui:
+    build:
+      context: ./ui
+    restart: unless-stopped
+    ports:
+      - "${UI_PORT:-5173}:80"
+
+volumes:
+  session-data:
+  uploads-data:
