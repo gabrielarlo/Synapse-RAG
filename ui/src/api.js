@@ -99,6 +99,7 @@ export const api = {
     })
   },
   chat: (payload) => client.post('/api/chat', payload),
+  getSessionHistory: (id) => client.get(`/api/chat/sessions/${id}/history`),
   listAudit: (params) => client.get('/api/audit', { params })
 }
 

@@ -167,13 +167,14 @@ def test_replace_and_delete_authorization(app_client):
     c = app_client["client"]
     staff = login(c, "staff", "staffpass")
     admin = login(c, "admin", "adminpass")
-    # internal doc uploaded by staff: staff may manage it, another user may not
+    # internal doc uploaded by staff: staff may create it but not manage it
     r = c.post("/api/documents", headers=authz(staff),
                params={"internal": "true"}, files={"file": ("i.txt", b"x")})
     did = r.json()["document_id"]
-    assert _replace(c, staff, did).status_code == 200
+    assert _replace(c, staff, did).status_code == 403
+    assert c.delete(f"/api/documents/{did}", headers=authz(staff)).status_code == 403
 
-    # admin can manage it too
+    # admin can manage it
     assert _replace(c, admin, did).status_code == 200
 
     # staff cannot touch an account they are not assigned to
@@ -280,8 +281,13 @@ def test_view_document_authorization(app_client):
 
     ri = c.post("/api/documents", headers=authz(admin),
                 params={"internal": "true"}, files={"file": ("i.txt", b"x")})
+    # internal detail is admin-only (staff cannot even view it)
+    r_view = c.get(f"/api/documents/{ri.json()['document_id']}",
+                   headers=authz(staff))
+    assert r_view.status_code == 403
+    assert "visible to admins" in r_view.json()["detail"]
     assert c.get(f"/api/documents/{ri.json()['document_id']}",
-                 headers=authz(staff)).status_code == 200
+                 headers=authz(admin)).status_code == 200
 
     assert c.get("/api/documents/not-a-uuid", headers=authz(admin)).status_code == 404
     assert c.get("/api/documents/00000000-0000-0000-0000-000000000000",

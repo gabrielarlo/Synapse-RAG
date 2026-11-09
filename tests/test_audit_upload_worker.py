@@ -44,8 +44,58 @@ def test_admin_audit_count_and_refusal(app_client):
     assert r.status_code == 200 and "2" in r.json()["answer"]
     r = c.post("/api/chat", headers=authz(admin),
                json={"account_id": app_client["a"]["id"],
+                     "question": "audit: uploads this day"})
+    assert r.status_code == 200 and "2" in r.json()["answer"]
+    r = c.post("/api/chat", headers=authz(admin),
+               json={"account_id": app_client["a"]["id"],
+                     "question": "audit: uploads per day"})
+    assert r.status_code == 200 and "2" in r.json()["answer"]
+    r = c.post("/api/chat", headers=authz(admin),
+               json={"account_id": app_client["a"]["id"],
                      "question": "audit: what is the meaning of life?"})
     assert r.status_code == 200 and "can only answer" in r.json()["answer"]
+
+
+def test_audit_manila_day_and_account_scope(app_client):
+    from datetime import datetime, time, timezone
+
+    from app.audit import _APP_TZ, answer_audit
+    s = app_client["s"]
+    a, b = app_client["a"]["id"], app_client["b"]["id"]
+    # 00:30 Manila today == yesterday 16:30 UTC: old UTC-prefix logic missed it.
+    today_manila = datetime.now(_APP_TZ).date()
+    ts = datetime.combine(today_manila, time(0, 30), tzinfo=_APP_TZ) \
+        .astimezone(timezone.utc).isoformat()
+    s.events.append({"ts": ts, "actor": "admin", "action": "upload",
+                     "account_id": b, "detail": None})
+    s.log(actor="admin", action="login")  # logins carry no account
+    ok, text = answer_audit("audit: uploads today", s, b)
+    assert ok and "Asia/Manila" in text and ": 1." in text
+    ok, text = answer_audit("audit: uploads today", s, a)
+    assert ok and ": 0." in text  # other account's upload is out of scope
+    ok, text = answer_audit("audit: how many logins today?", s, b)
+    assert ok and ": 1." in text  # platform-wide, not scoped to 0
+
+
+def test_audit_session_history_roundtrip(app_client):
+    c = app_client["client"]
+    admin = login(c, "admin", "adminpass")
+    staff = login(c, "staff", "staffpass")
+    r = c.post("/api/chat", headers=authz(admin),
+               json={"account_id": app_client["a"]["id"],
+                     "question": "audit: how many logins today?"})
+    assert r.status_code == 200 and r.json()["session_id"]
+    sid = r.json()["session_id"]
+    h = c.get(f"/api/chat/sessions/{sid}/history", headers=authz(admin))
+    assert h.status_code == 200
+    turns = h.json()["turns"]
+    assert [t["role"] for t in turns] == ["user", "assistant"]
+    assert turns[0]["content"] == "audit: how many logins today?"
+    assert turns[1]["content"].startswith("Logins today (Asia/Manila)")
+    assert all(t["ts"] for t in turns)
+    assert turns[1]["category"] == "audit"
+    assert c.get(f"/api/chat/sessions/{sid}/history",
+                 headers=authz(staff)).status_code == 403
 
 
 def test_authorized_upload_returns_job(app_client):

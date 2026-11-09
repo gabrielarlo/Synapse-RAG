@@ -18,12 +18,22 @@ def _seed(store, a, b):
     return one, other
 
 
-def test_internal_sees_own_plus_internal(store):
+def test_account_scope_sees_only_own_docs(store):
     one, _ = _seed(store["s"], store["a"]["id"], store["b"]["id"])
     scope = Scope(user=store["staff"], account_id=store["a"]["id"])
     texts = [c["content"] for c in store["s"].search(one, scope)]
-    assert any("acme" in t for t in texts) and any("internal" in t for t in texts)
+    assert any("acme" in t for t in texts)
     assert not any("globex" in t for t in texts)
+    assert not any("internal" in t for t in texts)  # internal needs internal scope
+
+
+def test_admin_scope_is_single_scope_too(store):
+    # admin no longer bypasses retrieval scope — selection always wins
+    one, _ = _seed(store["s"], store["a"]["id"], store["b"]["id"])
+    scope = Scope(user=store["admin"], account_id=store["a"]["id"], is_admin=True)
+    texts = [c["content"] for c in store["s"].search(one, scope)]
+    assert any("acme" in t for t in texts)
+    assert not any("internal" in t or "globex" in t for t in texts)
 
 
 def test_external_never_sees_internal_or_foreign(store):

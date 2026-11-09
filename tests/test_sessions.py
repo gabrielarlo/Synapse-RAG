@@ -89,7 +89,32 @@ def test_stale_claimed_job_requeued(store):
     assert got is not None and got["id"] == jid
 
 
-def test_today_is_real_utc_day():
-    from datetime import datetime, timezone
-    from app.audit import _today
-    assert _today() == datetime.now(timezone.utc).date().isoformat()
+def test_session_history_roundtrip_and_ownership(app_client):
+    c = app_client["client"]
+    staff = login(c, "staff", "staffpass")
+    admin = login(c, "admin", "adminpass")
+    a = app_client["a"]["id"]
+    sid = c.post("/api/chat", headers=authz(staff),
+                 json={"account_id": a, "question": "hello"}).json()["session_id"]
+
+    r = c.get(f"/api/chat/sessions/{sid}/history", headers=authz(staff))
+    assert r.status_code == 200, r.text
+    turns = r.json()["turns"]
+    assert [(t["role"], t["content"]) for t in turns] == [
+        ("user", "hello"), ("assistant", " grounded answer from context")]
+    assert all(t["ts"] for t in turns)  # reload restore shows time…
+    assert turns[1]["category"] == "general"  # …and category
+    assert turns[1]["escalated"] is False and turns[1]["department"] is None
+
+    # unknown session 404s; another user's session 403s
+    assert c.get("/api/chat/sessions/sess_nope/history",
+                 headers=authz(staff)).status_code == 404
+    assert c.get(f"/api/chat/sessions/{sid}/history",
+                 headers=authz(admin)).status_code == 403
+
+
+def test_today_is_manila_day():
+    from datetime import datetime
+
+    from app.audit import _APP_TZ, _today
+    assert _today() == datetime.now(_APP_TZ).date().isoformat()

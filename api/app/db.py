@@ -10,6 +10,8 @@ import time
 import psycopg
 from psycopg_pool import ConnectionPool
 
+_NIL_ACCOUNT = "00000000-0000-0000-0000-000000000000"  # RLS sentinel for internal scope
+
 from .store import Chunk, Scope, User
 
 
@@ -62,7 +64,12 @@ class PostgresStore:
             conn.commit()
 
     def _s(self, scope: Scope) -> dict:
-        return {"account_id": scope.account_id, "caller": scope.caller,
+        # Internal scope must set a non-empty current_account or RLS's
+        # `current_account <> ''` clause hides every internal row; the nil
+        # UUID matches no real account, so account rows stay hidden.
+        account_id = scope.account_id or (
+            _NIL_ACCOUNT if scope.caller == "internal" else None)
+        return {"account_id": account_id, "caller": scope.caller,
                 "is_admin": scope.is_admin}
 
     # -- identity --
@@ -177,11 +184,21 @@ class PostgresStore:
             return {"chunks": [r[0] for r in rows],
                     "total": rows[0][1] if rows else 0}
 
+    def _scope_where(self, scope: Scope, table: str) -> tuple[str, list]:
+        """Single-scope SQL: exactly one account's rows, or internal rows.
+        Applies to admins too — management is where the admin bypass is."""
+        if scope.account_id is not None:
+            return f" WHERE {table}account_id=%s", [scope.account_id]
+        if scope.caller == "internal":
+            return f" WHERE {table}is_internal", []
+        return " WHERE 1=0", []  # unscoped (e.g. bad external caller): nothing
+
     def list_documents(self, scope: Scope) -> list[dict]:
+        q = ("SELECT id, filename, account_id, is_internal, status, error,"
+             " uploaded_by, created_at, updated_at, version, category FROM documents")
+        where, args = self._scope_where(scope, "")
         with self._tx(**self._s(scope)) as conn, conn.cursor() as cur:
-            cur.execute("SELECT id, filename, account_id, is_internal, status, error,"
-                        " uploaded_by, created_at, updated_at, version, category FROM documents"
-                        " ORDER BY created_at DESC")
+            cur.execute(q + where + " ORDER BY created_at DESC", args)
             return [{"id": str(r[0]), "filename": r[1],
                      "account_id": str(r[2]) if r[2] else None, "is_internal": r[3],
                      "status": r[4], "error": r[5],
@@ -314,13 +331,14 @@ class PostgresStore:
                      "[" + ",".join(map(str, c.embedding)) + "]"))
 
     def search(self, embedding: list[float], scope: Scope, limit: int = 5) -> list[dict]:
+        q = ("SELECT c.document_id, c.account_id, c.is_internal, c.content,"
+             " d.category FROM chunks c"
+             " LEFT JOIN documents d ON d.id = c.document_id")
+        where, args = self._scope_where(scope, "c.")
+        q += where + " ORDER BY c.embedding <=> %s::vector LIMIT %s"
+        args += ["[" + ",".join(map(str, embedding)) + "]", limit]
         with self._tx(**self._s(scope)) as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT c.document_id, c.account_id, c.is_internal, c.content,"
-                " d.category FROM chunks c"
-                " LEFT JOIN documents d ON d.id = c.document_id"
-                " ORDER BY c.embedding <=> %s::vector LIMIT %s",
-                ("[" + ",".join(map(str, embedding)) + "]", limit))
+            cur.execute(q, args)
             return [{"document_id": str(r[0]),
                      "account_id": str(r[1]) if r[1] else None,
                      "is_internal": r[2], "content": r[3],

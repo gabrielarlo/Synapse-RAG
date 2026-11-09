@@ -50,12 +50,12 @@ AUDIT_INTENTS = (
 def match_audit_intent(text: str) -> str | None:
     """Map an `audit: ` question to a v1 allowlisted intent, else None."""
     t = text[len("audit:"):].strip().lower()
-    if re.search(r"how many .*upload.*(today|per day|each day|daily)", t) and \
+    if re.search(r"users?.*(upload|uploads|uploading)|uploading users?", t):
+        return "uploading_users_today"
+    if re.search(r"upload.*(today|this day|per day|each day|daily)", t) and \
             "user" not in t:
         return "uploads_today"
-    if re.search(r"how many users?.*(upload|uploads|uploading)", t):
-        return "uploading_users_today"
-    if re.search(r"how many questions?", t):
+    if re.search(r"questions?", t):
         return "questions_per_account_today"
     if re.search(r"escalat", t):
         return "escalations_per_department_today"

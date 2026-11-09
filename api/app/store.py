@@ -173,11 +173,14 @@ class InMemoryStore:
         return {"chunks": [c["content"] for c in rows[:limit]], "total": len(rows)}
 
     def list_documents(self, scope: Scope) -> list[dict]:
+        # exactly one scope for every role: an account's docs, or internal
+        # docs (management authorization is where admin bypass applies)
         out = []
         for d in self.documents.values():
-            if scope.is_admin or d["account_id"] == scope.account_id:
+            if scope.account_id is not None and d["account_id"] == scope.account_id:
                 out.append(d)
-            elif d["is_internal"] and scope.caller == "internal":
+            elif scope.account_id is None and scope.caller == "internal" \
+                    and d["is_internal"]:
                 out.append(d)
         return out
 
@@ -233,9 +236,10 @@ class InMemoryStore:
     def search(self, embedding: list[float], scope: Scope, limit: int = 5) -> list[dict]:
         scored = []
         for c in self.chunks:
-            if scope.is_admin or c["account_id"] == scope.account_id:
-                pass
-            elif not (c["is_internal"] and scope.caller == "internal"):
+            if scope.account_id is not None:
+                if c["account_id"] != scope.account_id:
+                    continue
+            elif scope.caller != "internal" or not c["is_internal"]:
                 continue
             scored.append((cosine(embedding, c["embedding"]), c))
         scored.sort(key=lambda t: t[0], reverse=True)

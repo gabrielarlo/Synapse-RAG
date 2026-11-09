@@ -8,7 +8,7 @@
       <span v-if="sessionId" class="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-mono shrink-0">session {{ String(sessionId).slice(0, 8) }}</span>
     </div>
     <div class="flex flex-wrap items-center gap-2 mb-4">
-      <select v-model="accountId" aria-label="Account" class="border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500">
+      <select v-model="accountId" aria-label="Account" :disabled="internal" class="border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400">
         <option value="">Select account</option>
         <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
       </select>
@@ -88,6 +88,50 @@ const accounts = ref([])
 const accountId = ref('')
 const internal = ref(currentRole() !== 'staff')
 const sessionId = ref(null)
+const SESSION_KEY = 'chat_session'
+let restoring = false
+
+function saveSession() {
+  try {
+    if (sessionId.value) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        sid: sessionId.value, accountId: accountId.value, internal: internal.value
+      }))
+    } else {
+      localStorage.removeItem(SESSION_KEY)
+    }
+  } catch { /* private mode etc. — session just won't survive reload */ }
+}
+
+function restoreSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null')
+    if (!s?.sid) return
+    restoring = true
+    internal.value = !!s.internal
+    accountId.value = s.accountId || ''
+    nextTick(() => {
+      sessionId.value = s.sid
+      restoring = false
+      // rebuild the visible thread — a bare session id after reload looks
+      // like the session was cleared
+      api.getSessionHistory(s.sid)
+        .then(({ data }) => {
+          // never clobber messages the user already sent in the meantime
+          if (sessionId.value !== s.sid || messages.value.length) return
+          messages.value = (data.turns || []).map((t) => ({
+            role: t.role,
+            text: t.content,
+            time: t.ts ? new Date(t.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+            escalated: !!t.escalated,
+            department: t.department || null,
+            category: t.escalated ? null : t.category,
+          }))
+        })
+        .catch(() => { /* history unavailable — stay on empty thread */ })
+    })
+  } catch { /* corrupt entry — start fresh */ }
+}
 const question = ref('')
 const messages = ref([])
 const error = ref('')
@@ -109,7 +153,7 @@ const emptyTitle = computed(() => {
 
 const emptyHint = computed(() => {
   if (internal.value) return 'Answers come from internal documents only — no account content.'
-  return accountId.value ? 'Answers are scoped to this account plus internal documents.' : 'Select an account above, or check internal.'
+  return accountId.value ? 'Answers are scoped to this account only.' : 'Select an account above, or check internal.'
 })
 
 function nowLabel() {
@@ -130,6 +174,7 @@ async function scrollDown() {
 
 function newSession() {
   sessionId.value = null
+  saveSession()
   messages.value = []
   error.value = ''
   question.value = ''
@@ -155,6 +200,7 @@ async function send() {
       question: q
     })
     sessionId.value = data.session_id
+    saveSession()
     const notices = []
     if (data.session_expired) notices.push('Previous session context expired (30-min window).')
     messages.value.push({
@@ -178,6 +224,7 @@ async function send() {
 }
 
 onMounted(async () => {
+  restoreSession()
   try {
     const { data } = await api.listAccounts()
     accounts.value = data
@@ -188,7 +235,9 @@ onMounted(async () => {
 
 // scope switch invalidates the bound session and the displayed thread
 watch([accountId, internal], () => {
+  if (restoring) return  // restoring a persisted session, not a user switch
   sessionId.value = null
+  saveSession()
   messages.value = []
 })
 </script>

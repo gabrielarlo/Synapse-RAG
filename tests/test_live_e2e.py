@@ -99,12 +99,15 @@ def test_e2e_full_flow(live, tmp_path, monkeypatch):
         assert worker.run_once(store, live["app"].state.ctx["ollama"]) is True
     assert worker.run_once(store, live["app"].state.ctx["ollama"]) is False
 
-    # RLS on chunks: internal/A sees Acme+internal, external/A excludes internal
+    # single-scope search: account scope sees only its own docs
     from app.store import Scope
     vec = live["app"].state.ctx["ollama"].embed(["refunds"])[0]
     assert len(vec) == 768
     got_in = {x["content"] for x in store.search(vec, Scope(None, a, "internal", False))}
-    assert any("Acme" in t for t in got_in) and any("Founders" in t for t in got_in)
+    assert any("Acme" in t for t in got_in) and not any("Founders" in t for t in got_in)
+    # internal scope sees only internal docs (PostgresStore sentinel path)
+    got_is = {x["content"] for x in store.search(vec, Scope(None, None, "internal", False))}
+    assert any("Founders" in t for t in got_is) and not any("Acme" in t for t in got_is)
     got_ex = {x["content"] for x in store.search(vec, Scope(None, a, "external", False))}
     assert any("Acme" in t for t in got_ex) and not any("Founders" in t for t in got_ex)
 

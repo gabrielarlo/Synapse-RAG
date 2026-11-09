@@ -36,16 +36,15 @@ def _norm_id(raw: str) -> str:
 
 
 def _authorize(store, user: User, doc: dict) -> None:
-    """Admins manage everything; account docs need membership; internal docs
-    belong to their uploader."""
+    """Admins manage everything; account docs need membership; internal
+    docs are managed by admins only."""
     if user.role == "admin":
         return
     if doc["account_id"]:
         if not store.is_member(user.id, doc["account_id"]):
             raise HTTPException(403, "not assigned to this account")
-    elif doc["uploaded_by"] != user.id:
-        raise HTTPException(403, "only the uploader or an admin can change"
-                                 " an internal document")
+    else:
+        raise HTTPException(403, "internal documents are managed by admins only")
 
 
 def _unlink(path: str) -> None:
@@ -195,11 +194,14 @@ def view(document_id: str, request: Request, user: User = Depends(authed)):
     doc = store.get_document(did)
     if doc is None:
         raise HTTPException(404, "unknown document")
-    # read rule mirrors list_documents: internal docs are visible to every
-    # authenticated user; account docs need membership
-    if user.role != "admin" and doc["account_id"] \
-            and not store.is_member(user.id, doc["account_id"]):
-        raise HTTPException(403, "not assigned to this account")
+    # read rule mirrors management: admins and account members see their
+    # docs; internal docs are admin-only
+    if user.role != "admin":
+        if doc["account_id"]:
+            if not store.is_member(user.id, doc["account_id"]):
+                raise HTTPException(403, "not assigned to this account")
+        else:
+            raise HTTPException(403, "internal documents are visible to admins only")
     content = store.document_content(did)
     if doc.get("uploaded_by") is not None:
         doc = {**doc, "uploaded_by": next(
