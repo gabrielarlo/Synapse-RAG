@@ -30,7 +30,8 @@ def create_app(store=None, sessions=None, ollama=None) -> FastAPI:
         sessions = SessionStore(settings.SESSION_DB_PATH, settings.SESSION_TTL_MIN * 60)
     if ollama is None:
         ollama = Ollama(settings.OLLAMA_URL, settings.OLLAMA_GEN_MODEL,
-                        settings.OLLAMA_EMBED_MODEL, settings.OLLAMA_DECISION_MODEL)
+                        settings.OLLAMA_EMBED_MODEL, settings.OLLAMA_DECISION_MODEL,
+                        vision_model=settings.OLLAMA_VISION_MODEL)
 
     app.state.ctx = {"settings": settings, "store": store, "sessions": sessions,
                      "ollama": ollama, "login_limiter": RateLimiter(),

@@ -121,13 +121,56 @@ class InMemoryStore:
         did = str(uuid.uuid4())
         doc = {"id": did, "filename": filename, "account_id": account_id,
                "is_internal": is_internal, "status": "queued",
-               "error": None, "uploaded_by": uploaded_by, "created_at": _now()}
+               "error": None, "uploaded_by": uploaded_by, "created_at": _now(),
+               "updated_at": _now(),
+               "version": 1, "category": None}
         self.documents[did] = doc
         jid = str(uuid.uuid4())
         self.jobs[jid] = {"id": jid, "document_id": did, "account_id": account_id,
                           "is_internal": is_internal, "status": "pending",
                           "attempts": 0, "error": None}
         return {"document": doc, "job_id": jid}
+
+    def get_document(self, document_id: str) -> dict | None:
+        return self.documents.get(document_id)
+
+    def replace_document(self, document_id: str, filename: str | None) -> dict | None:
+        """Replace content: bump version, drop old vectors and jobs, queue a new
+        job carrying the document's scope. None when the document is gone."""
+        d = self.documents.get(document_id)
+        if d is None:
+            return None
+        d["version"] += 1
+        if filename:
+            d["filename"] = filename
+        d["updated_at"] = _now()
+        d["status"], d["error"], d["category"] = "queued", None, None
+        self.chunks = [c for c in self.chunks if c["document_id"] != document_id]
+        for jid in [k for k, j in self.jobs.items() if j["document_id"] == document_id]:
+            del self.jobs[jid]
+        jid = str(uuid.uuid4())
+        self.jobs[jid] = {"id": jid, "document_id": document_id,
+                          "account_id": d["account_id"],
+                          "is_internal": d["is_internal"], "status": "pending",
+                          "attempts": 0, "error": None}
+        return {"job_id": jid, "version": d["version"], "filename": d["filename"],
+                "updated_at": d["updated_at"]}
+
+    def delete_document(self, document_id: str) -> str | None:
+        """Remove document + vectors + jobs; returns the filename, None if gone."""
+        d = self.documents.pop(document_id, None)
+        if d is None:
+            return None
+        self.chunks = [c for c in self.chunks if c["document_id"] != document_id]
+        for jid in [k for k, j in self.jobs.items() if j["document_id"] == document_id]:
+            del self.jobs[jid]
+        return d["filename"]
+
+    def document_content(self, document_id: str, limit: int = 50) -> dict:
+        """Ordered chunk text for the read-only view, capped for payload size."""
+        rows = sorted((c for c in self.chunks if c["document_id"] == document_id),
+                      key=lambda c: c["ord"])
+        return {"chunks": [c["content"] for c in rows[:limit]], "total": len(rows)}
 
     def list_documents(self, scope: Scope) -> list[dict]:
         out = []
@@ -153,16 +196,33 @@ class InMemoryStore:
                 return out
         return None
 
-    def finish_job(self, job_id: str, ok: bool, error: str | None = None) -> None:
-        j = self.jobs[job_id]
+    def finish_job(self, job_id: str, ok: bool, error: str | None = None,
+                   category: str | None = None,
+                   document_id: str | None = None) -> bool:
+        """Job-gated finish: False (no writes) when the job was superseded."""
+        j = self.jobs.get(job_id)
+        if j is None or (document_id and j["document_id"] != document_id):
+            return False
         j["status"] = "ready" if ok else "failed"
         j["error"] = error
         d = self.documents[j["document_id"]]
         d["status"] = "ready" if ok else "failed"
         d["error"] = error
+        if ok and category is not None:
+            d["category"] = category
+        return True
 
-    def add_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
-        d = self.documents[document_id]
+    def add_chunks(self, document_id: str, chunks: list[Chunk],
+                   job_id: str | None = None) -> None:
+        d = self.documents.get(document_id)
+        if d is None:
+            raise ValueError("unknown document")
+        if job_id is not None:
+            j = self.jobs.get(job_id)
+            if j is None or j["document_id"] != document_id:
+                raise ValueError("stale job")  # replaced/deleted mid-ingest
+            self.chunks = [c for c in self.chunks
+                           if c["document_id"] != document_id]
         for i, c in enumerate(chunks):
             self.chunks.append({"document_id": document_id,
                                 "account_id": d["account_id"],
@@ -179,7 +239,8 @@ class InMemoryStore:
                 continue
             scored.append((cosine(embedding, c["embedding"]), c))
         scored.sort(key=lambda t: t[0], reverse=True)
-        return [c for _, c in scored[:limit]]
+        return [dict(c, category=self.documents.get(c["document_id"], {}).get("category"))
+                for _, c in scored[:limit]]
 
     # -- external credentials --
     def issue_credential(self, account_id: str, secret_hash: str) -> str:

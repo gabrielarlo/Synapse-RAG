@@ -153,28 +153,89 @@ class PostgresStore:
             cur.execute(
                 "INSERT INTO documents(account_id, is_internal, filename, uploaded_by)"
                 " VALUES (%s,%s,%s,%s) RETURNING id, filename, account_id, is_internal,"
-                " status, error, uploaded_by, created_at",
+                " status, error, uploaded_by, created_at, updated_at, version, category",
                 (account_id, is_internal, filename, uploaded_by))
             r = cur.fetchone()
             doc = {"id": str(r[0]), "filename": r[1],
                    "account_id": str(r[2]) if r[2] else None, "is_internal": r[3],
                    "status": r[4], "error": r[5], "uploaded_by": str(r[6]),
-                   "created_at": r[7].isoformat()}
+                   "created_at": r[7].isoformat(), "updated_at": r[8].isoformat(),
+                   "version": r[9], "category": r[10]}
             cur.execute(
                 "INSERT INTO ingestion_jobs(document_id, account_id, is_internal)"
                 " VALUES (%s,%s,%s) RETURNING id",
                 (doc["id"], account_id, is_internal))
             return {"document": doc, "job_id": str(cur.fetchone()[0])}
 
+    def document_content(self, document_id: str, limit: int = 50) -> dict:
+        """Ordered chunk text for the read-only view, capped for payload size."""
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("SELECT content, count(*) OVER () FROM chunks"
+                        " WHERE document_id=%s ORDER BY ord LIMIT %s",
+                        (document_id, limit))
+            rows = cur.fetchall()
+            return {"chunks": [r[0] for r in rows],
+                    "total": rows[0][1] if rows else 0}
+
     def list_documents(self, scope: Scope) -> list[dict]:
         with self._tx(**self._s(scope)) as conn, conn.cursor() as cur:
             cur.execute("SELECT id, filename, account_id, is_internal, status, error,"
-                        " uploaded_by, created_at FROM documents ORDER BY created_at DESC")
+                        " uploaded_by, created_at, updated_at, version, category FROM documents"
+                        " ORDER BY created_at DESC")
             return [{"id": str(r[0]), "filename": r[1],
                      "account_id": str(r[2]) if r[2] else None, "is_internal": r[3],
                      "status": r[4], "error": r[5],
                      "uploaded_by": str(r[6]) if r[6] else None,
-                     "created_at": r[7].isoformat()} for r in cur.fetchall()]
+                     "created_at": r[7].isoformat(),
+                     "updated_at": r[8].isoformat() if r[8] else None,
+                     "version": r[9], "category": r[10]} for r in cur.fetchall()]
+
+    def get_document(self, document_id: str) -> dict | None:
+        # admin-scoped: authz reads must see internal and account docs alike
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("SELECT id, filename, account_id, is_internal, uploaded_by,"
+                        " status, version, category, created_at, updated_at"
+                        " FROM documents WHERE id=%s",
+                        (document_id,))
+            r = cur.fetchone()
+            return {"id": str(r[0]), "filename": r[1],
+                    "account_id": str(r[2]) if r[2] else None, "is_internal": r[3],
+                    "uploaded_by": str(r[4]) if r[4] else None, "status": r[5],
+                    "version": r[6], "category": r[7],
+                    "created_at": r[8].isoformat() if r[8] else None,
+                    "updated_at": r[9].isoformat() if r[9] else None} if r else None
+
+    def replace_document(self, document_id: str, filename: str | None) -> dict | None:
+        """Replace content: bump version (takes the row lock first), drop old
+        vectors/jobs, queue a new job carrying the document's scope."""
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE documents SET version=version+1,"
+                " filename=COALESCE(%s, filename), status='queued', error=NULL,"
+                " category=NULL, updated_at=now() WHERE id=%s"
+                " RETURNING id, filename, version, updated_at",
+                (filename, document_id))
+            r = cur.fetchone()
+            if r is None:
+                return None
+            cur.execute("DELETE FROM chunks WHERE document_id=%s", (document_id,))
+            cur.execute("DELETE FROM ingestion_jobs WHERE document_id=%s",
+                        (document_id,))
+            cur.execute(
+                "INSERT INTO ingestion_jobs(document_id, account_id, is_internal)"
+                " SELECT id, account_id, is_internal FROM documents WHERE id=%s"
+                " RETURNING id", (document_id,))
+            return {"job_id": str(cur.fetchone()[0]), "version": r[2],
+                    "filename": r[1],
+                    "updated_at": r[3].isoformat() if r[3] else None}
+
+    def delete_document(self, document_id: str) -> str | None:
+        # doc row locked first; chunks/jobs go via FK cascade
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM documents WHERE id=%s RETURNING filename",
+                        (document_id,))
+            r = cur.fetchone()
+            return r[0] if r else None
 
     def claim_job(self) -> dict | None:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
@@ -198,25 +259,53 @@ class PostgresStore:
                     "account_id": str(r[2]) if r[2] else None, "is_internal": r[3],
                     "status": "claimed", "attempts": r[5] + 1, "filename": r[6]}
 
-    def finish_job(self, job_id: str, ok: bool, error: str | None = None) -> None:
+    def finish_job(self, job_id: str, ok: bool, error: str | None = None,
+                   category: str | None = None,
+                   document_id: str | None = None) -> bool:
+        """Job-gated finish. Locks the document first (lock invariant), then
+        updates the job only if it still exists for that document. Returns
+        False and writes nothing when the job was superseded."""
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
-            cur.execute("UPDATE ingestion_jobs SET status=%s, error=%s, updated_at=now()"
-                        " WHERE id=%s RETURNING document_id",
-                        ("ready" if ok else "failed", error, job_id))
-            r = cur.fetchone()
-            if r is None:
-                raise ValueError("unknown job")
-            cur.execute("UPDATE documents SET status=%s, error=%s WHERE id=%s",
-                        ("ready" if ok else "failed", error, r[0]))
-
-    def add_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
-        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
-            cur.execute("SELECT account_id, is_internal FROM documents WHERE id=%s",
+            if document_id is None:
+                # unlocked read; no row lock, so the doc-first order holds
+                cur.execute("SELECT document_id FROM ingestion_jobs WHERE id=%s",
+                            (job_id,))
+                r = cur.fetchone()
+                if r is None:
+                    return False
+                document_id = str(r[0])
+            cur.execute("SELECT id FROM documents WHERE id=%s FOR UPDATE",
                         (document_id,))
+            if cur.fetchone() is None:
+                return False
+            cur.execute("UPDATE ingestion_jobs SET status=%s, error=%s,"
+                        " updated_at=now() WHERE id=%s AND document_id=%s"
+                        " RETURNING id",
+                        ("ready" if ok else "failed", error, job_id, document_id))
+            if cur.fetchone() is None:
+                return False
+            cur.execute("UPDATE documents SET status=%s, error=%s,"
+                        " category=COALESCE(%s, category) WHERE id=%s",
+                        ("ready" if ok else "failed", error,
+                         category if ok else None, document_id))
+            return True
+
+    def add_chunks(self, document_id: str, chunks: list[Chunk],
+                   job_id: str | None = None) -> None:
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("SELECT account_id, is_internal FROM documents"
+                        " WHERE id=%s FOR UPDATE", (document_id,))
             row = cur.fetchone()
             if row is None:
                 raise ValueError("unknown document")
             acct, internal = row
+            if job_id is not None:
+                cur.execute("SELECT 1 FROM ingestion_jobs WHERE id=%s"
+                            " AND document_id=%s", (job_id, document_id))
+                if cur.fetchone() is None:
+                    raise ValueError("stale job")  # replaced/deleted mid-ingest
+                cur.execute("DELETE FROM chunks WHERE document_id=%s",
+                            (document_id,))
             for i, c in enumerate(chunks):
                 cur.execute(
                     "INSERT INTO chunks(document_id, account_id, is_internal, ord,"
@@ -227,12 +316,15 @@ class PostgresStore:
     def search(self, embedding: list[float], scope: Scope, limit: int = 5) -> list[dict]:
         with self._tx(**self._s(scope)) as conn, conn.cursor() as cur:
             cur.execute(
-                "SELECT document_id, account_id, is_internal, content FROM chunks"
-                " ORDER BY embedding <=> %s::vector LIMIT %s",
+                "SELECT c.document_id, c.account_id, c.is_internal, c.content,"
+                " d.category FROM chunks c"
+                " LEFT JOIN documents d ON d.id = c.document_id"
+                " ORDER BY c.embedding <=> %s::vector LIMIT %s",
                 ("[" + ",".join(map(str, embedding)) + "]", limit))
             return [{"document_id": str(r[0]),
                      "account_id": str(r[1]) if r[1] else None,
-                     "is_internal": r[2], "content": r[3]} for r in cur.fetchall()]
+                     "is_internal": r[2], "content": r[3],
+                     "category": r[4]} for r in cur.fetchall()]
 
     # -- external credentials (system lookups run admin-scoped) --
     def issue_credential(self, account_id: str, secret_hash: str) -> str:

@@ -49,6 +49,12 @@ def chat(body: ChatIn, request: Request, user: User = Depends(authed)):
         raise HTTPException(503, "model backend unavailable, retry later")
     c["sessions"].assistant_message(sid, answer)
 
+    # category follows the retrieved documents when they agree; otherwise
+    # keep the triage guess (empty retrieval included)
+    cats = {c.get("category") for c in chunks}
+    category = cats.pop() if chunks and all(cats) and len(cats) == 1 \
+        else triage.category
+
     c["store"].log(actor=user.username, action="question",
                     account_id=scope.account_id, detail=body.question[:200])
     prefix = ""
@@ -62,4 +68,4 @@ def chat(body: ChatIn, request: Request, user: User = Depends(authed)):
         answer += EXPIRY_NOTICE
     return ChatOut(answer=prefix + answer, session_id=sid,
                    session_expired=expired, escalated=triage.escalate,
-                   department=triage.department, category=triage.category)
+                   department=triage.department, category=category)

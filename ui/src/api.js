@@ -51,6 +51,19 @@ export function currentRole() {
   }
 }
 
+// Surface the real error: API returns JSON {detail}, but nginx/proxy HTML
+// errors (413, 502...) have no detail — show status instead of a vague fallback.
+export function errorDetail(e, fallback = 'Request failed.') {
+  const d = e?.response?.data
+  if (typeof d?.detail === 'string' && d.detail) return d.detail
+  if (typeof d === 'string' && d.trim() && !d.trim().startsWith('<')) return d.trim()
+  const s = e?.response?.status
+  if (s === 413) return 'File too large.'
+  if (s) return `${fallback} (HTTP ${s})`
+  if (!e?.response) return `${fallback} (network error — is the API up?)`
+  return fallback
+}
+
 export const api = {
   login: (username, password) =>
     client.post('/api/auth/login', { username, password }),
@@ -67,6 +80,16 @@ export const api = {
   createUser: (username, password, role) =>
     client.post('/api/users', { username, password, role }),
   listDocuments: (params) => client.get('/api/documents', { params }),
+  getDocument: (id) => client.get(`/api/documents/${id}`),
+  replaceDocument: (id, file, filename) => {
+    const form = new FormData()
+    form.append('file', file)
+    return client.put(`/api/documents/${id}`, form, {
+      params: filename ? { filename } : {},
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  deleteDocument: (id) => client.delete(`/api/documents/${id}`),
   uploadDocument: (file, params) => {
     const form = new FormData()
     form.append('file', file)

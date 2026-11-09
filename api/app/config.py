@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     OLLAMA_GEN_MODEL: str = "llama3.2:3b"
     OLLAMA_EMBED_MODEL: str = "nomic-embed-text:latest"
     OLLAMA_DECISION_MODEL: str = "llama3.2:3b"
+    OLLAMA_VISION_MODEL: str = "lfm3-vl:2b-q4_K_M"  # image OCR; must be vision-capable
     EMBED_DIM: int = 768
     JWT_EXPIRE_MIN: int = 30
     REFRESH_EXPIRE_DAYS: int = 7

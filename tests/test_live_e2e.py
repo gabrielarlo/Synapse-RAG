@@ -108,6 +108,10 @@ def test_e2e_full_flow(live, tmp_path, monkeypatch):
     got_ex = {x["content"] for x in store.search(vec, Scope(None, a, "external", False))}
     assert any("Acme" in t for t in got_ex) and not any("Founders" in t for t in got_ex)
 
+    # document_content: real SQL ordering, cap and total count
+    content = store.document_content(did, limit=1)
+    assert len(content["chunks"]) == 1 and content["total"] >= 1
+
     # staff asks: triage + retrieval + generation live
     r = c.post("/api/chat", headers=sh,
                json={"account_id": a, "question": "How long do Acme refunds take?"})

@@ -2,17 +2,29 @@
 from __future__ import annotations
 
 import json
+import base64
 
 import httpx
+
+DOC_CATEGORIES = {
+    "policy": "Company policy, procedures, rules, or guidelines",
+    "contract": "Contracts, agreements, terms, or legal documents",
+    "technical": "Technical documentation, product or engineering material",
+    "billing": "Invoices, payments, pricing, or refunds",
+    "hr": "People, hiring, leave, or employee information",
+    "other": "Anything that does not fit the categories above",
+}
 
 
 class Ollama:
     def __init__(self, base_url: str, gen_model: str, embed_model: str,
-                 decision_model: str, timeout_s: float = 60.0) -> None:
+                 decision_model: str, timeout_s: float = 60.0,
+                 vision_model: str = "") -> None:
         self.base = base_url.rstrip("/")
         self.gen_model = gen_model
         self.embed_model = embed_model
         self.decision_model = decision_model
+        self.vision_model = vision_model
         self._http = httpx.Client(timeout=timeout_s)
 
     def healthy(self) -> bool:
@@ -74,6 +86,36 @@ class Ollama:
         return json.dumps({"category": cat, "escalate": esc >= 0.5,
                            "department": dep})
 
+    def tag_document(self, text: str) -> str | None:
+        """Classify a document into the fixed taxonomy; None when untaggable."""
+        state = text.encode("utf-8")[:4000].decode("utf-8", "ignore")
+        if not state.strip():
+            return None
+        r = self._http.post(
+            f"{self.base}/v1/systemone",
+            json={"model": self.decision_model, "state": state,
+                  "questions": {"category": {
+                      "type": "choice",
+                      "instructions": "Which category best describes this document?",
+                      "criteria": DOC_CATEGORIES}}})
+        r.raise_for_status()
+        choice = ((r.json().get("answers") or {}).get("category") or {}).get("choice")
+        return choice if choice in DOC_CATEGORIES else None
+
+    def extract_image_text(self, data: bytes) -> str:
+        """OCR an image with the vision model; empty result means no text."""
+        if not self.vision_model:
+            raise ValueError("vision model not configured")
+        r = self._http.post(
+            f"{self.base}/api/generate",
+            json={"model": self.vision_model, "stream": False,
+                  "prompt": "Transcribe every piece of visible text in this"
+                            " image exactly. Output only the text.",
+                  "images": [base64.b64encode(data).decode()]},
+            timeout=180.0)  # OCR is slow; bounded well above the default
+        r.raise_for_status()
+        return (r.json().get("response") or "").strip()
+
     def embed(self, texts: list[str]) -> list[list[float]]:
         out: list[list[float]] = []
         for t in texts:
@@ -105,6 +147,14 @@ class FakeOllama:
         import json
         self.calls.append("decide")
         return json.dumps(self.triage)
+
+    def tag_document(self, text: str) -> str | None:
+        self.calls.append("tag")
+        return "other"
+
+    def extract_image_text(self, data: bytes) -> str:
+        self.calls.append("ocr")
+        return "ocr text from image"
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         self.calls.append("embed")
