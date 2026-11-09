@@ -110,6 +110,32 @@ class SessionStore:
                      "category": r[3], "escalated": bool(r[4]),
                      "department": r[5]} for r in reversed(rows)]
 
+    def list_sessions(self, user_id: str, limit: int = 20) -> list[dict]:
+        """User sessions, newest first, limited. Count/preview
+        exclude audit artifacts (user 'audit: ' + assistant category='audit');
+        audit-only sessions get preview='' count=0. Read-only: never touches
+        last_active, never resurrects. History shows all (limited), not TTL-filtered."""
+        limit = max(1, min(50, limit))
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT session_id, account_id, last_active FROM sessions"
+                " WHERE user_id=?"
+                " ORDER BY last_active DESC LIMIT ?", (user_id, limit)).fetchall()
+            out: list[dict] = []
+            for sid, acct, last in rows:
+                turns = self._conn.execute(
+                    "SELECT t.role, t.content, m.category FROM session_turns t"
+                    " LEFT JOIN session_meta m ON m.turn_id=t.rowid"
+                    " WHERE t.session_id=? ORDER BY t.rowid ASC", (sid,)).fetchall()
+                non_audit = [t for t in turns
+                             if not ((t[0] == 'user' and (t[1] or '').startswith('audit: '))
+                                     or t[2] == 'audit')]
+                preview = next((t[1][:80] for t in non_audit if t[0] == 'user' and t[1]), '')
+                out.append({"session_id": sid, "account_id": acct,
+                            "last_active": last, "count": len(non_audit),
+                            "preview": preview})
+            return out
+
     def _insert_meta(self, turn_id: int, ts: str | None,
                      category: str | None, escalated: bool,
                      department: str | None) -> None:

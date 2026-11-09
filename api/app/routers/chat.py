@@ -1,6 +1,6 @@
 """Internal chat: auth -> authz -> audit: check -> triage -> RLS retrieval
 -> generation. Session memory bound to (user, account)."""
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from httpx import HTTPError as BackendDown
 
 from ..audit import answer_audit
@@ -81,6 +81,27 @@ def chat(body: ChatIn, request: Request, user: User = Depends(authed)):
     return ChatOut(answer=prefix + answer, session_id=sid,
                    session_expired=expired, escalated=triage.escalate,
                    department=triage.department, category=category)
+
+
+@router.get("/sessions")
+def list_sessions(request: Request,
+                  user: User = Depends(authed),
+                  limit: int = Query(20, ge=1, le=50)):
+    """List caller's own sessions (owner-only, limited). Account sessions
+    the user no longer belongs to are skipped silently (no abort, no leak)."""
+    c = request.app.state.ctx
+    rows = c["sessions"].list_sessions(user.id, limit=limit)
+    out = []
+    for r in rows:
+        if r["account_id"]:
+            try:
+                resolve_scope(request, r["account_id"], user)
+            except HTTPException as e:
+                if e.status_code == 403:
+                    continue  # revoked membership: hide row, keep listing
+                raise  # allow 422/other to propagate
+        out.append(r)
+    return out
 
 
 @router.get("/sessions/{session_id}/history", response_model=dict)

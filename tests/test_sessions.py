@@ -118,3 +118,61 @@ def test_today_is_manila_day():
 
     from app.audit import _APP_TZ, _today
     assert _today() == datetime.now(_APP_TZ).date().isoformat()
+
+
+def test_list_sessions_owner_isolation_and_preview(app_client):
+    c = app_client["client"]
+    staff = login(c, "staff", "staffpass")
+    admin = login(c, "admin", "adminpass")
+    a = app_client["a"]["id"]
+    sid = c.post("/api/chat", headers=authz(staff),
+                 json={"account_id": a, "question": "hello history"}).json()["session_id"]
+    r = c.get("/api/chat/sessions", headers=authz(staff))
+    assert r.status_code == 200
+    rows = r.json()
+    assert len(rows) == 1 and rows[0]["session_id"] == sid
+    assert rows[0]["preview"] == "hello history" and rows[0]["count"] == 2
+    # other user sees none
+    assert c.get("/api/chat/sessions", headers=authz(admin)).json() == []
+    assert c.get("/api/chat/sessions").status_code == 401
+
+
+def test_list_sessions_revoked_skip_and_internal(app_client):
+    c = app_client["client"]
+    staff = login(c, "staff", "staffpass")
+    a, b = app_client["a"]["id"], app_client["b"]["id"]
+    c.post("/api/chat", headers=authz(staff),
+           json={"account_id": a, "question": "for a"})
+    c.post("/api/chat", headers=authz(staff),
+           json={"account_id": b, "question": "for b"})  # 403: not a member, never stored
+    # direct: internal session always visible
+    c.post("/api/chat", headers=authz(staff),
+           json={"question": "internal q"})
+    rows = c.get("/api/chat/sessions", headers=authz(staff)).json()
+    accts = {r["account_id"] for r in rows}
+    assert "" in accts and a in accts and b not in accts
+
+
+def test_list_sessions_limit_validation(app_client):
+    c = app_client["client"]
+    staff = login(c, "staff", "staffpass")
+    for bad in ["0", "51", "abc"]:
+        assert c.get("/api/chat/sessions", params={"limit": bad},
+                     headers=authz(staff)).status_code == 422
+    assert c.get("/api/chat/sessions", params={"limit": "1"},
+                 headers=authz(staff)).status_code == 200
+
+
+def test_list_sessions_excludes_audit_and_shows_expired():
+    s = SessionStore(":memory:", ttl_s=60)
+    import time
+    now = time.time()
+    sid, _, _ = s.user_message(None, "u", "", "audit: secret", now=now)
+    s.assistant_message(sid, "audit answer", category="audit")
+    old, _, _ = s.user_message(None, "u", "", "old", now=now - 9999)
+    rows = s.list_sessions("u", limit=20)
+    # Q3: show all (limited), not TTL-filtered; audit excluded from preview/count
+    assert {r["session_id"] for r in rows} == {sid, old}
+    by_id = {r["session_id"]: r for r in rows}
+    assert by_id[sid]["preview"] == "" and by_id[sid]["count"] == 0
+    assert by_id[old]["preview"] == "old"
