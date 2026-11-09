@@ -5,7 +5,7 @@
       <span class="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-medium">{{ docs.length }} file{{ docs.length === 1 ? '' : 's' }}</span>
     </div>
     <div class="flex flex-wrap items-center gap-2 mb-4">
-      <select v-model="accountId" aria-label="Account" class="border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500">
+      <select v-model="accountId" aria-label="Account" class="border border-slate-200 rounded-full px-4 py-2.5 bg-white focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400">
         <option value="">Select account</option>
         <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
       </select>

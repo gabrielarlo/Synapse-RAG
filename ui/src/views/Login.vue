@@ -18,11 +18,11 @@
         <form @submit.prevent="submit" class="space-y-3">
           <label class="block text-sm">
             <span class="text-slate-600 font-medium">Username</span>
-            <input v-model="username" placeholder="Username" autocomplete="username" class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-indigo-500" required />
+            <BaseInput v-model="username" placeholder="Username" autocomplete="username" class="mt-1 w-full" required />
           </label>
           <label class="block text-sm">
             <span class="text-slate-600 font-medium">Password</span>
-            <input v-model="password" type="password" placeholder="Password" autocomplete="current-password" class="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-indigo-500" required />
+            <BaseInput v-model="password" type="password" placeholder="Password" autocomplete="current-password" class="mt-1 w-full" required />
           </label>
           <button class="w-full bg-indigo-600 text-white rounded-lg py-2.5 hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50" :disabled="loading">
             {{ loading ? 'Signing in…' : 'Sign in' }}
@@ -38,6 +38,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api.js'
+import BaseInput from '../components/BaseInput.vue'
 
 const username = ref('')
 const password = ref('')

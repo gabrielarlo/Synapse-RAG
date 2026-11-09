@@ -12,7 +12,7 @@
         <div class="p-3 border-b border-slate-100">
           <p class="text-sm font-semibold text-slate-700">Inbox <span class="text-xs font-normal text-slate-400">({{ historySessions.length }})</span></p>
           <div class="relative mt-2">
-            <input v-model="historyQuery" placeholder="Search conversations…" aria-label="Search conversations" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-sm focus:border-indigo-500" />
+            <BaseInput v-model="historyQuery" placeholder="Search conversations…" aria-label="Search conversations" class="w-full pr-8 text-sm" />
             <button v-if="historyQuery" @click="historyQuery = ''" aria-label="Clear search" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-lg leading-none">×</button>
           </div>
           <button @click="newSession" class="mt-2 w-full bg-indigo-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">+ New chat</button>
@@ -121,6 +121,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { api, currentRole } from '../api.js'
+import BaseInput from './BaseInput.vue'
 
 const props = defineProps({ compact: { type: Boolean, default: false } })
 

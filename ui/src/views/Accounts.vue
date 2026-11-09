@@ -5,7 +5,7 @@
       <span class="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-medium">{{ accounts.length }} total</span>
     </div>
     <form @submit.prevent="create" class="flex gap-2 mb-4">
-      <input v-model="name" placeholder="New account name" aria-label="New account name" class="border border-slate-200 rounded-lg px-3 py-2 flex-1 focus:border-indigo-500" required />
+      <BaseInput v-model="name" placeholder="New account name" aria-label="New account name" class="flex-1" required />
       <button class="bg-indigo-600 text-white rounded-lg px-4 py-2 hover:bg-indigo-700 transition-colors font-medium">Create</button>
     </form>
     <p v-if="error" class="text-sm text-red-600 mb-2" role="alert">{{ error }}</p>
@@ -25,6 +25,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
+import BaseInput from '../components/BaseInput.vue'
 
 const accounts = ref([])
 const name = ref('')

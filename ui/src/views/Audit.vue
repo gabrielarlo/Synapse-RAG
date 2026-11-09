@@ -9,9 +9,9 @@
       (e.g. <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">audit: uploads per day</code>).
     </p>
     <div class="flex flex-wrap gap-2 mb-4">
-      <input v-model="filters.action" placeholder="Action filter" aria-label="Action filter" class="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-indigo-500" />
-      <input v-model="filters.account_id" placeholder="Account ID" aria-label="Account ID" class="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-indigo-500" />
-      <input v-model.number="filters.limit" type="number" min="1" aria-label="Limit" class="border border-slate-200 rounded-lg px-3 py-2 text-sm w-28 focus:border-indigo-500" />
+      <BaseInput v-model="filters.action" placeholder="Action filter" aria-label="Action filter" class="text-sm" />
+      <BaseInput v-model="filters.account_id" placeholder="Account ID" aria-label="Account ID" class="text-sm" />
+      <BaseInput v-model.number="filters.limit" type="number" min="1" aria-label="Limit" class="text-sm w-28" />
       <button @click="load" class="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-indigo-700 transition-colors font-medium">Load</button>
     </div>
     <p v-if="error" class="text-sm text-red-600 mb-2" role="alert">{{ error }}</p>
@@ -36,6 +36,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
+import BaseInput from '../components/BaseInput.vue'
 
 const events = ref([])
 const error = ref('')

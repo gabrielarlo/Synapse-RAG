@@ -6,9 +6,9 @@
         <span class="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-medium">{{ users.length }} total</span>
       </div>
       <form @submit.prevent="createUser" class="space-y-2 mb-4">
-        <input v-model="form.username" placeholder="Username" aria-label="Username" class="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-indigo-500" required />
-        <input v-model="form.password" type="password" placeholder="Password" aria-label="Password" autocomplete="new-password" class="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-indigo-500" required />
-        <select v-model="form.role" aria-label="Role" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500">
+        <BaseInput v-model="form.username" placeholder="Username" aria-label="Username" class="w-full" required />
+        <BaseInput v-model="form.password" type="password" placeholder="Password" aria-label="Password" autocomplete="new-password" class="w-full" required />
+        <select v-model="form.role" aria-label="Role" class="w-full border border-slate-200 rounded-full px-4 py-2.5 bg-white focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400">
           <option value="staff">staff</option>
           <option value="admin">admin</option>
         </select>
@@ -28,11 +28,11 @@
     <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-6 h-fit">
       <h2 class="text-xl font-bold mb-4 text-slate-800">Assign staff to account</h2>
       <div class="space-y-2">
-        <select v-model="accountId" aria-label="Account" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500">
+        <select v-model="accountId" aria-label="Account" class="w-full border border-slate-200 rounded-full px-4 py-2.5 bg-white focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400">
           <option value="">Select account</option>
           <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
         </select>
-        <select v-model="userId" aria-label="User" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white focus:border-indigo-500">
+        <select v-model="userId" aria-label="User" class="w-full border border-slate-200 rounded-full px-4 py-2.5 bg-white focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400">
           <option value="">Select user</option>
           <option v-for="u in users" :key="u.id || u.username" :value="u.id">{{ u.username }}</option>
         </select>
@@ -50,6 +50,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
+import BaseInput from '../components/BaseInput.vue'
 
 const users = ref([])
 const accounts = ref([])
