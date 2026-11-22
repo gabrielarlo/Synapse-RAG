@@ -246,6 +246,30 @@ class PostgresStore:
                     "filename": r[1],
                     "updated_at": r[3].isoformat() if r[3] else None}
 
+    def transfer_document(self, document_id: str, target_account_id: str) -> dict | None:
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("SELECT account_id, is_internal FROM documents WHERE id=%s FOR UPDATE",
+                        (document_id,))
+            row = cur.fetchone()
+            if row is None:
+                return None
+            if row[0] and str(row[0]) == target_account_id:
+                raise ValueError("already in target account")
+            cur.execute("UPDATE documents SET account_id=%s, is_internal=FALSE,"
+                        " updated_at=now() WHERE id=%s"
+                        " RETURNING id, filename, account_id, is_internal, status,"
+                        " updated_at, version",
+                        (target_account_id, document_id))
+            r = cur.fetchone()
+            cur.execute("UPDATE chunks SET account_id=%s, is_internal=FALSE"
+                        " WHERE document_id=%s", (target_account_id, document_id))
+            cur.execute("UPDATE ingestion_jobs SET account_id=%s, is_internal=FALSE"
+                        " WHERE document_id=%s", (target_account_id, document_id))
+            return {"id": str(r[0]), "filename": r[1],
+                    "account_id": str(r[2]) if r[2] else None, "is_internal": r[3],
+                    "status": r[4], "updated_at": r[5].isoformat() if r[5] else None,
+                    "version": r[6]}
+
     def delete_document(self, document_id: str) -> str | None:
         # doc row locked first; chunks/jobs go via FK cascade
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:

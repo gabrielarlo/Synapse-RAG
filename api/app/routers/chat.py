@@ -3,7 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from httpx import HTTPError as BackendDown
 
-from ..audit import answer_audit
+from ..a2ui import build_audit_surface, build_chat_surface, extract_a2ui_from_text, merge_surfaces
+from ..audit import answer_audit, get_audit_events_for_surface
 from ..deps import authed, resolve_scope
 from ..rag import build_prompt, retrieve, triage_question
 from ..schemas import ChatIn, ChatOut
@@ -34,22 +35,30 @@ def chat(body: ChatIn, request: Request, user: User = Depends(authed)):
         except PermissionError:
             raise HTTPException(403, "session belongs to another user or account")
         answered, text = answer_audit(body.question, c["store"], scope.account_id)
-        c["sessions"].assistant_message(sid, text, category="audit")
+        # A2UI only for answered audit queries; refusals stay text-only
+        if answered:
+            scope_label = " today (Asia/Manila, platform-wide)" if scope.account_id is None else " today (Asia/Manila, account scoped)"
+            events = get_audit_events_for_surface(body.question, c["store"], scope.account_id)
+            a2ui = build_audit_surface(session_id=sid, question=body.question, answer=text, events=events, scope_label=scope_label)
+        else:
+            a2ui = None
+        # persist even refusals so history reflects the refusal (category audit excluded from list_sessions counts)
+        c["sessions"].assistant_message(sid, text, category="audit", a2ui=a2ui)
         c["store"].log(actor=user.username, action="audit_question",
                         account_id=scope.account_id, detail=body.question[:200])
         if expired:
             text += EXPIRY_NOTICE
         return ChatOut(answer=text, session_id=sid, session_expired=expired,
-                       category="audit")
+                       category="audit", a2ui=a2ui)
 
     try:
+        # bind session first so PermissionError is raised before any triage side-effects
+        sid, expired, history = c["sessions"].user_message(
+            body.session_id, user.id, scope.account_id or "", body.question)
         triage = triage_question(c["ollama"], body.question,
                                  log=lambda m: c["store"].log(
                                      actor="system", action="triage_fallback",
                                      account_id=scope.account_id, detail=m))
-
-        sid, expired, history = c["sessions"].user_message(
-            body.session_id, user.id, scope.account_id or "", body.question)
         chunks = retrieve(c["ollama"], c["store"], scope, body.question)
         answer = c["ollama"].generate(build_prompt(body.question, chunks, history))
     except PermissionError:
@@ -72,15 +81,25 @@ def chat(body: ChatIn, request: Request, user: User = Depends(authed)):
                         detail=f"category={triage.category} "
                                f"department={triage.department}")
         prefix = (f"[Escalated to {triage.department or 'support'}] ")
-    # stored raw (no prefix/notice); prefix + notice are response-only
-    c["sessions"].assistant_message(sid, answer, category=category,
+    # A2UI: deterministic surface from retrieval + triage, plus any
+    # agent-emitted ```a2ui fence the generator included.
+    answer_clean, llm_surface = extract_a2ui_from_text(answer)
+    # store the raw clean answer; prefix/notice are response-only
+    deterministic = build_chat_surface(
+        session_id=sid, answer=answer_clean, chunks=chunks,
+        category=category, escalated=triage.escalate,
+        department=triage.department)
+    a2ui = merge_surfaces(deterministic, llm_surface)
+    c["sessions"].assistant_message(sid, answer_clean, category=category,
                                     escalated=triage.escalate,
-                                    department=triage.department)
+                                    department=triage.department,
+                                    a2ui=a2ui)
+    display = prefix + answer_clean
     if expired:
-        answer += EXPIRY_NOTICE
-    return ChatOut(answer=prefix + answer, session_id=sid,
+        display += EXPIRY_NOTICE
+    return ChatOut(answer=display, session_id=sid,
                    session_expired=expired, escalated=triage.escalate,
-                   department=triage.department, category=category)
+                   department=triage.department, category=category, a2ui=a2ui)
 
 
 @router.get("/sessions")

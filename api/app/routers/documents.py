@@ -7,6 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from ..deps import authed, resolve_scope
+from ..schemas import TransferIn
 from ..store import User
 
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "/data/uploads")
@@ -158,6 +159,34 @@ def replace(document_id: str, request: Request, filename: str | None = None,
     return {"job_id": res["job_id"], "status": "queued",
             "document_id": did, "version": res["version"],
             "updated_at": res.get("updated_at")}
+
+
+@router.post("/{document_id}/transfer", response_model=dict)
+def transfer(document_id: str, body: TransferIn, request: Request,
+             user: User = Depends(authed)):
+    c = request.app.state.ctx
+    store = c["store"]
+    did = _norm_id(document_id)
+    doc = store.get_document(did)
+    if doc is None:
+        raise HTTPException(404, "unknown document")
+    _authorize(store, user, doc)
+    target = body.target_account_id
+    # validate target account exists and user has access to it
+    if not store.account_exists(target):
+        raise HTTPException(404, "target account not found")
+    if user.role != "admin" and not store.is_member(user.id, target):
+        raise HTTPException(403, "not assigned to target account")
+    with _lock_for(did):
+        try:
+            res = store.transfer_document(did, target)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        if res is None:
+            raise HTTPException(404, "unknown document")
+    store.log(actor=user.username, action="transfer",
+              account_id=target, detail=f"{doc['filename']} -> {target}")
+    return res
 
 
 @router.delete("/{document_id}", response_model=dict)

@@ -34,10 +34,27 @@ class AssignIn(BaseModel):
     user_id: str
 
 
+class TransferIn(BaseModel):
+    target_account_id: str
+
+
 class ChatIn(BaseModel):
     account_id: str | None = None
     question: str
     session_id: str | None = None
+
+
+class A2UIComponent(BaseModel):
+    id: str
+    type: str  # catalog-gated on render; see api/app/a2ui.py CATALOG
+    props: dict | None = None
+    children: list["A2UIComponent"] | None = None
+
+
+class A2UISurface(BaseModel):
+    surfaceId: str
+    components: list[A2UIComponent]
+    dataModel: dict | None = None
 
 
 class ChatOut(BaseModel):
@@ -47,6 +64,7 @@ class ChatOut(BaseModel):
     escalated: bool = False
     department: str | None = None
     category: str = "general"
+    a2ui: A2UISurface | None = None
 
 
 class FaqIn(BaseModel):

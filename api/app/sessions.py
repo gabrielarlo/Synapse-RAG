@@ -34,6 +34,11 @@ class SessionStore:
         self._conn.execute(
             "CREATE TABLE IF NOT EXISTS session_meta(turn_id INTEGER PRIMARY KEY,"
             " ts TEXT, category TEXT, escalated INTEGER, department TEXT)")
+        # A2UI: store declarative surface JSON per assistant turn (nullable, legacy = None)
+        try:
+            self._conn.execute("ALTER TABLE session_meta ADD COLUMN a2ui TEXT")
+        except Exception:
+            pass
         self._conn.commit()
 
     def user_message(self, session_id: str | None, user_id: str,
@@ -72,19 +77,27 @@ class SessionStore:
                 "INSERT INTO session_turns(session_id, role, content) VALUES (?,"
                 " 'user', ?)", (sid, content))
             self._insert_meta(cur.lastrowid, datetime.fromtimestamp(
-                now, tz=timezone.utc).isoformat(), None, False, None)
+                now, tz=timezone.utc).isoformat(), None, False, None, None)
             self._conn.commit()
             return sid, expired, context
 
     def assistant_message(self, session_id: str, content: str,
                           category: str | None = None, escalated: bool = False,
-                          department: str | None = None) -> None:
+                          department: str | None = None,
+                          a2ui: dict | None = None) -> None:
         with self._lock:
             cur = self._conn.execute(
                 "INSERT INTO session_turns(session_id, role, content) VALUES (?,"
                 " 'assistant', ?)", (session_id, content))
+            a2ui_json = None
+            if a2ui is not None:
+                import json as _json
+                try:
+                    a2ui_json = _json.dumps(a2ui)
+                except Exception:
+                    a2ui_json = None
             self._insert_meta(cur.lastrowid, datetime.now(
-                timezone.utc).isoformat(), category, escalated, department)
+                timezone.utc).isoformat(), category, escalated, department, a2ui_json)
             self._conn.commit()
 
     def get_session(self, session_id: str) -> tuple[str, str, float] | None:
@@ -98,17 +111,36 @@ class SessionStore:
     def list_turns(self, session_id: str, limit: int = 100) -> list[dict]:
         """Latest turns for restoring a persisted thread (chronological).
 
-        Includes display metadata (ts/category/escalated/department) when
+        Includes display metadata (ts/category/escalated/department/a2ui) when
         present; legacy turns without a meta row return None/empty fields."""
         with self._lock:
-            rows = self._conn.execute(
-                "SELECT t.role, t.content, m.ts, m.category, m.escalated,"
-                " m.department FROM session_turns t LEFT JOIN session_meta m"
-                " ON m.turn_id = t.rowid WHERE t.session_id=?"
-                " ORDER BY t.rowid DESC LIMIT ?", (session_id, limit)).fetchall()
-            return [{"role": r[0], "content": r[1], "ts": r[2],
-                     "category": r[3], "escalated": bool(r[4]),
-                     "department": r[5]} for r in reversed(rows)]
+            # a2ui column may not exist on old DBs — probe gracefully
+            try:
+                rows = self._conn.execute(
+                    "SELECT t.role, t.content, m.ts, m.category, m.escalated,"
+                    " m.department, m.a2ui FROM session_turns t LEFT JOIN session_meta m"
+                    " ON m.turn_id = t.rowid WHERE t.session_id=?"
+                    " ORDER BY t.rowid DESC LIMIT ?", (session_id, limit)).fetchall()
+            except Exception:
+                rows = self._conn.execute(
+                    "SELECT t.role, t.content, m.ts, m.category, m.escalated,"
+                    " m.department FROM session_turns t LEFT JOIN session_meta m"
+                    " ON m.turn_id = t.rowid WHERE t.session_id=?"
+                    " ORDER BY t.rowid DESC LIMIT ?", (session_id, limit)).fetchall()
+                rows = [(*r, None) for r in rows]
+            out = []
+            for r in reversed(rows):
+                a2ui = None
+                if len(r) > 6 and r[6]:
+                    try:
+                        import json as _json
+                        a2ui = _json.loads(r[6])
+                    except Exception:
+                        a2ui = None
+                out.append({"role": r[0], "content": r[1], "ts": r[2],
+                            "category": r[3], "escalated": bool(r[4]),
+                            "department": r[5], "a2ui": a2ui})
+            return out
 
     def list_sessions(self, user_id: str, limit: int = 20) -> list[dict]:
         """User sessions, newest first, limited. Count/preview
@@ -138,11 +170,18 @@ class SessionStore:
 
     def _insert_meta(self, turn_id: int, ts: str | None,
                      category: str | None, escalated: bool,
-                     department: str | None) -> None:
-        self._conn.execute(
-            "INSERT OR REPLACE INTO session_meta(turn_id, ts, category,"
-            " escalated, department) VALUES (?,?,?,?,?)",
-            (turn_id, ts, category, int(escalated), department))
+                     department: str | None, a2ui_json: str | None = None) -> None:
+        try:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO session_meta(turn_id, ts, category,"
+                " escalated, department, a2ui) VALUES (?,?,?,?,?,?)",
+                (turn_id, ts, category, int(escalated), department, a2ui_json))
+        except Exception:
+            # legacy DB without a2ui column
+            self._conn.execute(
+                "INSERT OR REPLACE INTO session_meta(turn_id, ts, category,"
+                " escalated, department) VALUES (?,?,?,?,?)",
+                (turn_id, ts, category, int(escalated), department))
 
     def _read_context(self, sid: str, limit: int = 6) -> str:
         # newest turns first, then back in chronological order

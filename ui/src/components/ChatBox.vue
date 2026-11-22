@@ -32,6 +32,7 @@
             <span v-else-if="m.category" class="text-[11px] text-slate-400">{{ m.category }}</span>
           </div>
           <p v-if="m.notice" class="text-xs text-amber-600 mt-1">{{ m.notice }}</p>
+          <A2UIRenderer v-if="m.a2ui" :surface="m.a2ui" @action="onA2UIAction" />
         </div>
       </div>
       <div v-if="loading" class="flex items-center" aria-live="polite">
@@ -76,6 +77,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { api, currentRole } from '../api.js'
+import A2UIRenderer from './A2UIRenderer.vue'
 
 const accounts = ref([])
 const accountId = ref('')
@@ -116,6 +118,7 @@ function restoreSession() {
             escalated: !!t.escalated,
             department: t.department || null,
             category: t.escalated ? null : t.category,
+            a2ui: t.a2ui || null,
           }))
           stick.value = true
           scrollDown(true)
@@ -168,6 +171,15 @@ async function scrollDown(force = false) {
   thread.value?.scrollTo({ top: thread.value.scrollHeight })
 }
 
+function onA2UIAction(action) {
+  if (!action) return
+  const q = action.question
+  if ((action.type === 'suggest' || action.type === 'ask') && q) {
+    question.value = q
+    send()
+  }
+}
+
 function newSession() {
   sessionId.value = null
   saveSession()
@@ -206,7 +218,8 @@ async function send() {
       escalated: data.escalated,
       department: data.department,
       category: data.escalated ? null : data.category,
-      notice: notices.join(' ')
+      notice: notices.join(' '),
+      a2ui: data.a2ui || null,
     })
   } catch (e) {
     if (messages.value.at(-1)?.role === 'user') messages.value.pop()

@@ -156,6 +156,26 @@ class InMemoryStore:
         return {"job_id": jid, "version": d["version"], "filename": d["filename"],
                 "updated_at": d["updated_at"]}
 
+    def transfer_document(self, document_id: str, target_account_id: str) -> dict | None:
+        """Move document (and its vectors/jobs) to another account."""
+        d = self.documents.get(document_id)
+        if d is None:
+            return None
+        if d["account_id"] == target_account_id:
+            raise ValueError("already in target account")
+        d["account_id"] = target_account_id
+        d["is_internal"] = False
+        d["updated_at"] = _now()
+        for c in self.chunks:
+            if c["document_id"] == document_id:
+                c["account_id"] = target_account_id
+                c["is_internal"] = False
+        for j in self.jobs.values():
+            if j["document_id"] == document_id:
+                j["account_id"] = target_account_id
+                j["is_internal"] = False
+        return d
+
     def delete_document(self, document_id: str) -> str | None:
         """Remove document + vectors + jobs; returns the filename, None if gone."""
         d = self.documents.pop(document_id, None)

@@ -29,10 +29,14 @@ External `POST /ext/faq`: key/secret auth → stateless RAG on own account only 
   run `docker compose up -d --build ui` (compose serves a static build — edits
   are not picked up until rebuilt). Task is not done until the rebuilt `ui`
   container is Up.
+- API/worker iteration: after ANY `api/` or `worker/` edit you MUST run
+  `docker compose up -d --build <service>` (e.g. `api`, `worker`) — containerized services run from built images and do not hot-reload.
+- Display: never show raw UUIDs in UI; resolve IDs to human-readable values (account name, username, filename) via the appropriate lookup (`/api/accounts`, `/api/auth/users`). If unresolved, show `—` or `Unknown account` — not the UUID. Keep IDs out of `title`/tooltip as well.
 
 ## Gates (run before done)
 
 - `.venv/bin/python -m pytest tests/ -q` — full suite green.
 - `docker compose config` — compose file valid.
 - Any `ui/` edit → `docker compose up -d --build ui` + container Up (required, not optional).
+- Any `api/` or `worker/` edit → `docker compose up -d --build <service>` for the changed service (e.g. `api`, `worker`) + container Up (required, not optional) — edits are not picked up until the image is rebuilt.
 - New endpoint or behavior → test asserting it, including the 401/403/422/429 cases.

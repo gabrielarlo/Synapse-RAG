@@ -53,10 +53,27 @@ export function currentRole() {
 
 // Surface the real error: API returns JSON {detail}, but nginx/proxy HTML
 // errors (413, 502...) have no detail — show status instead of a vague fallback.
+// Generic "Not Found" (FastAPI default for unknown route) is not actionable, so
+// map it to the caller-provided fallback with status to preserve context.
 export function errorDetail(e, fallback = 'Request failed.') {
+  const isGenericNotFound = (s) => typeof s === 'string' && s.trim().toLowerCase() === 'not found'
   const d = e?.response?.data
-  if (typeof d?.detail === 'string' && d.detail) return d.detail
-  if (typeof d === 'string' && d.trim() && !d.trim().startsWith('<')) return d.trim()
+  if (typeof d?.detail === 'string' && d.detail) {
+    const t = d.detail.trim()
+    if (isGenericNotFound(t)) {
+      const s = e?.response?.status
+      return s ? `${fallback} (HTTP ${s})` : fallback
+    }
+    return t
+  }
+  if (typeof d === 'string' && d.trim() && !d.trim().startsWith('<')) {
+    const t = d.trim()
+    if (isGenericNotFound(t)) {
+      const s = e?.response?.status
+      return s ? `${fallback} (HTTP ${s})` : fallback
+    }
+    return t
+  }
   const s = e?.response?.status
   if (s === 413) return 'File too large.'
   if (s) return `${fallback} (HTTP ${s})`
@@ -76,9 +93,9 @@ export const api = {
     client.post(`/api/accounts/${accountId}/staff`, { user_id }),
   unassignStaff: (accountId, userId) =>
     client.delete(`/api/accounts/${accountId}/staff/${userId}`),
-  listUsers: () => client.get('/api/users'),
+  listUsers: () => client.get('/api/auth/users'),
   createUser: (username, password, role) =>
-    client.post('/api/users', { username, password, role }),
+    client.post('/api/auth/users', { username, password, role }),
   listDocuments: (params) => client.get('/api/documents', { params }),
   getDocument: (id) => client.get(`/api/documents/${id}`),
   replaceDocument: (id, file, filename) => {
@@ -90,6 +107,7 @@ export const api = {
     })
   },
   deleteDocument: (id) => client.delete(`/api/documents/${id}`),
+  transferDocument: (id, target_account_id) => client.post(`/api/documents/${id}/transfer`, { target_account_id }),
   uploadDocument: (file, params) => {
     const form = new FormData()
     form.append('file', file)

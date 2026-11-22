@@ -1,0 +1,32 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ninecloud
+      POSTGRES_PASSWORD: ninecloud@123
+      POSTGRES_DB: synapse
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - synapse-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ninecloud -d synapse"]
+      interval: 5s
+      retries: 10
+
+  api:
+    environment:
+      DATABASE_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    environment:
+      DATABASE_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  synapse-db-data:
