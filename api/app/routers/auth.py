@@ -25,6 +25,8 @@ def login(body: LoginIn, request: Request):
     u = c["store"].get_user_by_name(body.username)
     if u is None or not check_password(body.password, u.pw_hash):
         raise HTTPException(401, "invalid credentials")
+    if not u.is_active:
+        raise HTTPException(403, "account deactivated")
     c["store"].log(actor=u.username, action="login")
     return _tokens(c, u)
 
@@ -38,6 +40,8 @@ def refresh(body: RefreshIn, request: Request):
     u = c["store"].get_user_by_name(p["sub"])
     if u is None:
         raise HTTPException(401, "unknown user")
+    if not u.is_active:
+        raise HTTPException(403, "account deactivated")
     u.role = p["role"]
     return _tokens(c, u)
 
@@ -60,10 +64,23 @@ def create_user(body: UserIn, request: Request, _admin: User = Depends(admin_onl
 def list_users(request: Request, _admin: User = Depends(admin_only)):
     c = request.app.state.ctx
     return [{"id": u.id, "username": u.username, "role": u.role,
-             "display_name": u.display_name} for u in c["store"].list_users()]
+             "display_name": u.display_name, "is_active": u.is_active}
+            for u in c["store"].list_users()]
+
+
+@router.post("/users/{user_id}/deactivate", response_model=dict)
+def deactivate_user(user_id: str, request: Request,
+                    admin: User = Depends(admin_only)):
+    if user_id == admin.id:
+        raise HTTPException(422, "cannot deactivate yourself")
+    c = request.app.state.ctx
+    if not c["store"].deactivate_user(user_id):
+        raise HTTPException(404, "user not found")
+    c["store"].log(actor=admin.username, action="user_deactivate", detail=user_id)
+    return {"ok": True}
 
 
 @router.get("/me", response_model=dict)
 def me(user: User = Depends(authed)):
     return {"id": user.id, "username": user.username, "role": user.role,
-            "display_name": user.display_name}
+            "display_name": user.display_name, "is_active": user.is_active}

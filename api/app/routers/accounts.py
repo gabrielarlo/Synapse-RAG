@@ -37,6 +37,32 @@ def get_account(account_id: str, request: Request, user: User = Depends(authed))
     return mine[account_id]
 
 
+@router.post("/{account_id}/archive", response_model=dict)
+def archive_account(account_id: str, request: Request,
+                    admin: User = Depends(admin_only)):
+    c = request.app.state.ctx
+    was = c["store"].archive_account(account_id, True)
+    if was is None:
+        raise HTTPException(404, "account not found")
+    if not was:
+        c["store"].log(actor=admin.username, action="account_archive",
+                       account_id=account_id, detail=f"archived {account_id}")
+    return {"archived": True}
+
+
+@router.post("/{account_id}/unarchive", response_model=dict)
+def unarchive_account(account_id: str, request: Request,
+                      admin: User = Depends(admin_only)):
+    c = request.app.state.ctx
+    was = c["store"].archive_account(account_id, False)
+    if was is None:
+        raise HTTPException(404, "account not found")
+    if was:
+        c["store"].log(actor=admin.username, action="account_unarchive",
+                       account_id=account_id, detail=f"unarchived {account_id}")
+    return {"archived": False}
+
+
 @router.post("/{account_id}/staff", response_model=dict)
 def assign_staff(account_id: str, body: AssignIn, request: Request,
                  _admin: User = Depends(admin_only)):

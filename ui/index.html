@@ -3,6 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Runs during HTML parse, before CSS paints — deferred modules would flash light.
+      (function () {
+        var mode = 'system'
+        try {
+          var stored = localStorage.getItem('theme')
+          if (stored === 'light' || stored === 'dark' || stored === 'system') mode = stored
+        } catch (e) {}
+        var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        document.documentElement.dataset.theme = mode
+      })()
+    </script>
     <title>Synapse RAG</title>
   </head>
   <body>

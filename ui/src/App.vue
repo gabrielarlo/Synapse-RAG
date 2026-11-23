@@ -62,7 +62,7 @@
     <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
       <header
         v-if="loggedIn"
-        class="bg-white/80 backdrop-blur border-b border-slate-200 px-4 md:px-6 py-3 flex items-center gap-3 shrink-0"
+        class="bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-700 px-4 md:px-6 py-3 flex items-center gap-3 shrink-0"
       >
         <button
           type="button"
@@ -70,7 +70,7 @@
           :aria-label="mobileOpen ? 'Close navigation' : 'Open navigation'"
           :aria-expanded="mobileOpen"
           aria-controls="app-sidebar"
-          class="md:hidden grid place-items-center w-10 h-10 -ml-1 rounded-lg hover:bg-slate-100 text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 shrink-0"
+          class="md:hidden grid place-items-center w-10 h-10 -ml-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 shrink-0"
         >
           <svg v-if="!mobileOpen" viewBox="0 0 20 20" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/></svg>
           <svg v-else viewBox="0 0 20 20" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/></svg>
@@ -79,11 +79,12 @@
           type="button"
           @click="sidebarCollapsed = !sidebarCollapsed"
           :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-          class="hidden md:grid place-items-center w-9 h-9 rounded-lg hover:bg-slate-100 text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 shrink-0"
+          class="hidden md:grid place-items-center w-9 h-9 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 shrink-0"
         >
           <svg viewBox="0 0 20 20" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round"/></svg>
         </button>
-        <h1 class="font-semibold text-slate-800 truncate flex-1 min-w-0">{{ pageTitle }}</h1>
+        <h1 class="font-semibold text-slate-800 dark:text-slate-100 truncate flex-1 min-w-0">{{ pageTitle }}</h1>
+        <ThemeToggle />
         <span class="text-xs text-slate-400 hidden sm:block shrink-0">API: {{ apiBase }}</span>
       </header>
       <main class="flex-1 overflow-y-auto p-4 md:p-6 pb-24 flex flex-col min-h-0">
@@ -103,11 +104,11 @@
     >
       <svg viewBox="0 0 20 20" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h9A2.5 2.5 0 0 1 17 5.5v6a2.5 2.5 0 0 1-2.5 2.5H8l-4 3.5v-12Z"/></svg>
     </button>
-    <div v-if="popupOpen && route.path !== '/chat'" id="chat-popup" role="dialog" aria-modal="false" aria-label="Chat" class="fixed bottom-24 right-6 z-30 w-[min(22rem,calc(100vw-2rem))] h-[32rem] max-h-[75vh] flex flex-col shadow-2xl shadow-indigo-950/20 rounded-2xl bg-white overflow-hidden border border-slate-200" @keydown.esc="closePopup">
-      <div class="flex items-center gap-2.5 px-4 py-3 shrink-0 border-b border-slate-100 bg-gradient-to-r from-indigo-50/80 to-white">
+    <div v-if="popupOpen && route.path !== '/chat'" id="chat-popup" role="dialog" aria-modal="false" aria-label="Chat" class="fixed bottom-24 right-6 z-30 w-[min(22rem,calc(100vw-2rem))] h-[32rem] max-h-[75vh] flex flex-col shadow-2xl shadow-indigo-950/20 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-700" @keydown.esc="closePopup">
+      <div class="flex items-center gap-2.5 px-4 py-3 shrink-0 border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-indigo-50/80 dark:from-slate-800 to-white dark:to-slate-900">
         <span class="grid place-items-center w-8 h-8 rounded-full bg-indigo-600 text-white shrink-0"><svg viewBox="0 0 20 20" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3h9A2.5 2.5 0 0 1 17 5.5v6a2.5 2.5 0 0 1-2.5 2.5H8l-4 3.5v-12Z"/></svg></span>
-        <span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-800">Chat</span><span class="block text-[11px] text-emerald-600"><span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 align-middle"></span>Online</span></span>
-        <button type="button" @click="closePopup" aria-label="Close chat" class="grid place-items-center w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-lg leading-none">×</button>
+        <span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-800 dark:text-slate-100">Chat</span><span class="block text-[11px] text-emerald-600 dark:text-emerald-400"><span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 align-middle"></span>Online</span></span>
+        <button type="button" @click="closePopup" aria-label="Close chat" class="grid place-items-center w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 text-lg leading-none">×</button>
       </div>
       <div class="flex-1 overflow-hidden min-h-0 flex flex-col">
         <ChatBox />
@@ -120,6 +121,7 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import ChatBox from './components/ChatBox.vue'
+import ThemeToggle from './components/ThemeToggle.vue'
 
 const router = useRouter()
 const route = useRoute()

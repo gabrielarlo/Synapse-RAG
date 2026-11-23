@@ -19,6 +19,7 @@ class User:
     pw_hash: str
     role: str  # admin | staff
     display_name: str | None = None
+    is_active: bool = True
 
 
 @dataclass
@@ -55,6 +56,7 @@ class InMemoryStore:
     def __init__(self) -> None:
         self.users: dict[str, User] = {}
         self.accounts: dict[str, str] = {}
+        self.archived: set[str] = set()
         self.staff_accounts: set[tuple[str, str]] = set()
         self.documents: dict[str, dict] = {}
         self.chunks: list[dict] = []
@@ -81,31 +83,54 @@ class InMemoryStore:
     def account_exists(self, account_id: str) -> bool:
         return account_id in self.accounts
 
+    def archive_account(self, account_id: str, archived: bool) -> bool | None:
+        """Atomically set archived flag. Returns previous value, or None if not found."""
+        if account_id not in self.accounts:
+            return None
+        was = account_id in self.archived
+        if archived:
+            self.archived.add(account_id)
+        else:
+            self.archived.discard(account_id)
+        return was
+
+    def is_archived(self, account_id: str) -> bool:
+        return account_id in self.archived
+
     def list_users(self) -> list[User]:
         return list(self.users.values())
+
+    def deactivate_user(self, user_id: str) -> bool:
+        u = self.users.get(user_id)
+        if u is None:
+            return False
+        u.is_active = False
+        return True
 
     def create_account(self, name: str) -> dict:
         if name in self.accounts.values():
             raise ValueError("account exists")
         aid = str(uuid.uuid4())
         self.accounts[aid] = name
-        return {"id": aid, "name": name}
+        return {"id": aid, "name": name, "is_archived": False}
 
     def list_accounts(self, scope: Scope) -> list[dict]:
         if scope.is_admin:
-            return [{"id": k, "name": v} for k, v in self.accounts.items()]
+            return [{"id": k, "name": v, "is_archived": k in self.archived}
+                    for k, v in self.accounts.items()]
         return [
-            {"id": a, "name": self.accounts[a]}
+            {"id": a, "name": self.accounts[a], "is_archived": a in self.archived}
             for (u, a) in self.staff_accounts
-            if u == scope.user.id and a in self.accounts
+            if u == scope.user.id and a in self.accounts and a not in self.archived
         ]
 
     def is_member(self, user_id: str, account_id: str) -> bool:
         return (user_id, account_id) in self.staff_accounts
 
     def assign(self, user_id: str, account_id: str) -> None:
+        # Router validates existence; no-op on unknown to mirror Postgres FK no-op.
         if user_id not in self.users or account_id not in self.accounts:
-            raise KeyError("unknown user or account")
+            return
         self.staff_accounts.add((user_id, account_id))
 
     def unassign(self, user_id: str, account_id: str) -> None:
@@ -114,6 +139,8 @@ class InMemoryStore:
     # -- documents / jobs --
     def create_document(self, filename: str, account_id: str | None,
                         is_internal: bool, uploaded_by: str) -> dict:
+        if account_id is not None and account_id in self.archived:
+            raise ValueError("account archived")
         if (account_id is None) == (not is_internal) and account_id is None:
             raise ValueError("scope required")
         if account_id is None and not is_internal:
@@ -132,7 +159,10 @@ class InMemoryStore:
         return {"document": doc, "job_id": jid}
 
     def get_document(self, document_id: str) -> dict | None:
-        return self.documents.get(document_id)
+        d = self.documents.get(document_id)
+        if d and d["account_id"] in self.archived:
+            return None
+        return d
 
     def replace_document(self, document_id: str, filename: str | None) -> dict | None:
         """Replace content: bump version, drop old vectors and jobs, queue a new
@@ -140,6 +170,8 @@ class InMemoryStore:
         d = self.documents.get(document_id)
         if d is None:
             return None
+        if d["account_id"] in self.archived:
+            raise ValueError("account archived")
         d["version"] += 1
         if filename:
             d["filename"] = filename
@@ -161,6 +193,8 @@ class InMemoryStore:
         d = self.documents.get(document_id)
         if d is None:
             return None
+        if d["account_id"] in self.archived or target_account_id in self.archived:
+            raise ValueError("account archived")
         if d["account_id"] == target_account_id:
             raise ValueError("already in target account")
         d["account_id"] = target_account_id
@@ -188,6 +222,9 @@ class InMemoryStore:
 
     def document_content(self, document_id: str, limit: int = 50) -> dict:
         """Ordered chunk text for the read-only view, capped for payload size."""
+        d = self.documents.get(document_id)
+        if d and d["account_id"] in self.archived:
+            return {"chunks": [], "total": 0}
         rows = sorted((c for c in self.chunks if c["document_id"] == document_id),
                       key=lambda c: c["ord"])
         return {"chunks": [c["content"] for c in rows[:limit]], "total": len(rows)}
@@ -197,6 +234,8 @@ class InMemoryStore:
         # docs (management authorization is where admin bypass applies)
         out = []
         for d in self.documents.values():
+            if d["account_id"] in self.archived:
+                continue
             if scope.account_id is not None and d["account_id"] == scope.account_id:
                 out.append(d)
             elif scope.account_id is None and scope.caller == "internal" \
@@ -210,6 +249,8 @@ class InMemoryStore:
             if j["status"] == "claimed" and now - j.get("updated_at", now) > CLAIM_STALE_S:
                 j["status"] = "pending"  # worker died mid-job; re-queue
         for j in self.jobs.values():
+            if self.documents.get(j["document_id"], {}).get("account_id") in self.archived:
+                continue
             if j["status"] == "pending":
                 j["status"] = "claimed"
                 j["attempts"] += 1
@@ -256,6 +297,8 @@ class InMemoryStore:
     def search(self, embedding: list[float], scope: Scope, limit: int = 5) -> list[dict]:
         scored = []
         for c in self.chunks:
+            if c["account_id"] in self.archived:
+                continue
             if scope.account_id is not None:
                 if c["account_id"] != scope.account_id:
                     continue

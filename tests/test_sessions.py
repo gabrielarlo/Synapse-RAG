@@ -163,7 +163,7 @@ def test_list_sessions_limit_validation(app_client):
                  headers=authz(staff)).status_code == 200
 
 
-def test_list_sessions_excludes_audit_and_shows_expired():
+def test_list_sessions_counts_audit_turns_and_shows_expired():
     s = SessionStore(":memory:", ttl_s=60)
     import time
     now = time.time()
@@ -171,8 +171,49 @@ def test_list_sessions_excludes_audit_and_shows_expired():
     s.assistant_message(sid, "audit answer", category="audit")
     old, _, _ = s.user_message(None, "u", "", "old", now=now - 9999)
     rows = s.list_sessions("u", limit=20)
-    # Q3: show all (limited), not TTL-filtered; audit excluded from preview/count
+    # show all (limited), not TTL-filtered; count/preview match the thread on open
     assert {r["session_id"] for r in rows} == {sid, old}
     by_id = {r["session_id"]: r for r in rows}
-    assert by_id[sid]["preview"] == "" and by_id[sid]["count"] == 0
-    assert by_id[old]["preview"] == "old"
+    assert by_id[sid]["preview"] == "audit: secret" and by_id[sid]["count"] == 2
+    assert by_id[old]["preview"] == "old" and by_id[old]["count"] == 1
+
+
+def test_delete_session_owner_only_and_child_rows(app_client):
+    c = app_client["client"]
+    sessions = app_client["app"].state.ctx["sessions"]
+    staff = login(c, "staff", "staffpass")
+    admin = login(c, "admin", "adminpass")
+    a = app_client["a"]["id"]
+    sid = c.post("/api/chat", headers=authz(staff),
+                 json={"account_id": a, "question": "delete me"}).json()["session_id"]
+    with sessions._lock:
+        turn_ids = [r[0] for r in sessions._conn.execute(
+            "SELECT rowid FROM session_turns WHERE session_id=?", (sid,)).fetchall()]
+    assert turn_ids  # the fixture produced real turns to clean up
+
+    assert c.delete(f"/api/chat/sessions/{sid}",
+                    headers=authz(admin)).status_code == 403
+    assert c.delete("/api/chat/sessions/sess_nope",
+                    headers=authz(staff)).status_code == 404
+    assert c.delete(f"/api/chat/sessions/{sid}").status_code == 401
+
+    r = c.delete(f"/api/chat/sessions/{sid}", headers=authz(staff))
+    assert r.status_code == 200, r.text
+    assert r.json() == {"deleted": sid}
+    assert c.get(f"/api/chat/sessions/{sid}/history",
+                 headers=authz(staff)).status_code == 404
+    assert sid not in [row["session_id"] for row in
+                       c.get("/api/chat/sessions", headers=authz(staff)).json()]
+
+    # No FK cascade exists — assert all three tables are clean, including orphan meta rows.
+    with sessions._lock:
+        assert sessions._conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE session_id=?", (sid,)).fetchone()[0] == 0
+        assert sessions._conn.execute(
+            "SELECT COUNT(*) FROM session_turns WHERE session_id=?", (sid,)).fetchone()[0] == 0
+        for turn_id in turn_ids:
+            assert sessions._conn.execute(
+                "SELECT COUNT(*) FROM session_meta WHERE turn_id=?",
+                (turn_id,)).fetchone()[0] == 0
+    assert any(e["detail"] == f"session {sid}"
+               for e in app_client["s"].audit_query(action="delete"))

@@ -17,6 +17,13 @@ client.interceptors.response.use(
   (r) => r,
   async (error) => {
     const original = error.config
+    if (error.response?.status === 403 &&
+        error.response?.data?.detail === 'account deactivated') {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      if (window.location.pathname !== '/login') window.location.href = '/login'
+      return Promise.reject(error)
+    }
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       const refreshToken = localStorage.getItem('refresh_token')
@@ -40,15 +47,22 @@ client.interceptors.response.use(
   }
 )
 
-export function currentRole() {
+function tokenPayload() {
   try {
     const t = localStorage.getItem('access_token')
-    if (!t) return ''
-    const payload = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-    return payload.role || ''
+    if (!t) return {}
+    return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
   } catch {
-    return ''
+    return {}
   }
+}
+
+export function currentRole() {
+  return tokenPayload().role || ''
+}
+
+export function currentUsername() {
+  return tokenPayload().sub || ''
 }
 
 // Surface the real error: API returns JSON {detail}, but nginx/proxy HTML
@@ -88,6 +102,8 @@ export const api = {
     client.post('/api/auth/refresh', { refresh_token }),
   listAccounts: () => client.get('/api/accounts'),
   createAccount: (name) => client.post('/api/accounts', { name }),
+  archiveAccount: (id) => client.post(`/api/accounts/${id}/archive`),
+  unarchiveAccount: (id) => client.post(`/api/accounts/${id}/unarchive`),
   getAccount: (id) => client.get(`/api/accounts/${id}`),
   assignStaff: (accountId, user_id) =>
     client.post(`/api/accounts/${accountId}/staff`, { user_id }),
@@ -96,6 +112,8 @@ export const api = {
   listUsers: () => client.get('/api/auth/users'),
   createUser: (username, password, role) =>
     client.post('/api/auth/users', { username, password, role }),
+  deactivateUser: (userId) =>
+    client.post(`/api/auth/users/${userId}/deactivate`),
   listDocuments: (params) => client.get('/api/documents', { params }),
   getDocument: (id) => client.get(`/api/documents/${id}`),
   replaceDocument: (id, file, filename) => {
@@ -119,6 +137,7 @@ export const api = {
   chat: (payload) => client.post('/api/chat', payload),
   listSessions: (params) => client.get('/api/chat/sessions', { params }),
   getSessionHistory: (id) => client.get(`/api/chat/sessions/${id}/history`),
+  deleteSession: (id) => client.delete(`/api/chat/sessions/${id}`),
   listAudit: (params) => client.get('/api/audit', { params })
 }
 

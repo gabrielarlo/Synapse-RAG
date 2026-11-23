@@ -17,6 +17,8 @@ def authed(request: Request, authorization: str = Header(default="")) -> User:
     u = c["store"].get_user_by_name(p["sub"])
     if u is None:
         raise HTTPException(401, "unknown user")
+    if not u.is_active:
+        raise HTTPException(403, "account deactivated")
     u.role = p["role"]
     return u
 
@@ -35,6 +37,8 @@ def resolve_scope(request: Request, account_id: str | None,
         raise HTTPException(422, "account_id is required")
     if user.role != "admin" and not c["store"].is_member(user.id, account_id):
         raise HTTPException(403, "not assigned to this account")
+    if c["store"].is_archived(account_id):
+        raise HTTPException(403, "account archived")
     return Scope(user=user, account_id=account_id, caller="internal",
                  is_admin=(user.role == "admin"))
 

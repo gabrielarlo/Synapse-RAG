@@ -23,6 +23,10 @@ def faq(body: FaqIn, request: Request, x_api_key: str = Header(default=""),
     if cred is None or cred["revoked"] or not check_password(x_api_secret,
                                                              cred["secret_hash"]):
         raise HTTPException(401, "invalid credentials")
+    # External scope is built directly from the credential, so it needs the
+    # same archived-tenant refusal that resolve_scope gives internal callers.
+    if c["store"].is_archived(cred["account_id"]):
+        raise HTTPException(403, "account archived")
     scope = Scope(user=None, account_id=cred["account_id"], caller="external",
                   is_admin=False)
     try:

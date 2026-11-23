@@ -1,24 +1,24 @@
 <template>
-  <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-4 sm:p-6 flex flex-col min-h-0">
+  <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-card border border-slate-100 dark:border-slate-700 p-4 sm:p-6 flex flex-col min-h-0">
     <div class="flex items-start justify-between gap-3 mb-4">
       <div class="min-w-0">
-        <h2 class="text-xl font-bold text-slate-800">Documents</h2>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100">Documents</h2>
         <p class="text-xs text-slate-400 mt-0.5">Upload, version and inspect account or internal knowledge sources.</p>
       </div>
-      <span class="shrink-0 text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-medium tabular-nums">{{ docs.length }} file{{ docs.length === 1 ? '' : 's' }}</span>
+      <span class="shrink-0 text-xs px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-medium tabular-nums">{{ docs.length }} file{{ docs.length === 1 ? '' : 's' }}</span>
     </div>
 
     <div class="flex flex-col gap-3 mb-4">
       <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
-        <select v-model="accountId" aria-label="Account" class="flex-1 min-w-0 min-h-11 border border-slate-200 rounded-full px-4 py-2.5 bg-white text-sm focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400">
+        <select v-model="accountId" aria-label="Account" class="flex-1 min-w-0 min-h-11 border border-slate-200 dark:border-slate-700 rounded-full px-4 py-2.5 bg-white dark:bg-slate-900 text-sm focus:border-indigo-500 disabled:bg-slate-50 dark:disabled:bg-slate-800 disabled:text-slate-400">
           <option value="">Select account</option>
           <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
         </select>
-        <label class="flex items-center gap-1.5 text-sm text-slate-600 min-h-11 shrink-0">
+        <label class="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 min-h-11 shrink-0">
           <input type="checkbox" v-model="internal" class="w-4 h-4 accent-indigo-600" /> internal
         </label>
-        <button @click="load" :disabled="loadingDocs" class="min-h-11 bg-slate-100 rounded-full px-4 py-2 hover:bg-slate-200 transition-colors text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 shrink-0">
-          <svg v-if="loadingDocs" viewBox="0 0 20 20" class="w-4 h-4 animate-spin text-slate-500" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3a7 7 0 1 0 7 7" stroke-linecap="round"/></svg>
+        <button @click="load" :disabled="loadingDocs" class="min-h-11 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 hover:bg-slate-200 transition-colors text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 shrink-0">
+          <svg v-if="loadingDocs" viewBox="0 0 20 20" class="w-4 h-4 animate-spin text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3a7 7 0 1 0 7 7" stroke-linecap="round"/></svg>
           Refresh
         </button>
       </div>
@@ -27,54 +27,54 @@
         @dragover.prevent="onDragOver"
         @dragleave.prevent="dragOver = false"
         @drop.prevent="onDrop"
-        :class="['border-2 border-dashed rounded-xl px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 transition-colors', dragOver ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50']"
+        :class="['border-2 border-dashed rounded-xl px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 transition-colors', dragOver ? 'border-indigo-300 dark:border-indigo-500/60 bg-indigo-50/60 dark:bg-indigo-500/10' : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800']"
       >
-        <div class="grid place-items-center w-10 h-10 rounded-xl bg-white border border-slate-200 text-indigo-600 shrink-0" aria-hidden="true">
+        <div class="grid place-items-center w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 shrink-0" aria-hidden="true">
           <svg viewBox="0 0 20 20" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 3.5v9M6.5 9.5l3.5 3.5 3.5-3.5"/><path d="M3.5 14.5v1A1.5 1.5 0 0 0 5 17h10a1.5 1.5 0 0 0 1.5-1.5v-1" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-slate-700">Drop a file here or <label for="doc-file" class="text-indigo-600 hover:text-indigo-700 underline cursor-pointer">browse</label></p>
+          <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Drop a file here or <label for="doc-file" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 underline cursor-pointer">browse</label></p>
           <p class="text-xs text-slate-400 truncate">{{ file ? file.name + ' · ' + (file.size > 1024*1024 ? (file.size/1024/1024).toFixed(1)+' MB' : (file.size/1024).toFixed(0)+' KB') : 'PDF, text, markdown — max 10 MB' }}</p>
         </div>
         <input id="doc-file" ref="fileInput" type="file" @change="onFile" class="sr-only" aria-label="Choose file to upload" />
         <div class="flex gap-2 shrink-0 w-full sm:w-auto">
-          <label for="doc-file" class="flex-1 sm:flex-none min-h-11 grid place-items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">Choose file</label>
+          <label for="doc-file" class="flex-1 sm:flex-none min-h-11 grid place-items-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">Choose file</label>
           <button @click="upload" :disabled="!file || uploading" class="flex-1 sm:flex-none min-h-11 bg-indigo-600 text-white rounded-full px-5 py-2 hover:bg-indigo-700 disabled:opacity-50 transition-colors text-sm font-medium inline-flex items-center justify-center gap-2">
             <svg v-if="uploading" viewBox="0 0 20 20" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3a7 7 0 1 0 7 7" stroke-linecap="round"/></svg>
             {{ uploading ? 'Uploading…' : 'Upload' }}
           </button>
         </div>
       </div>
-      <p v-if="file" class="text-xs text-slate-500">
-        Selected: <span class="font-medium text-slate-700">{{ file.name }}</span>
-        <button @click="clearFile" class="ml-2 text-slate-400 hover:text-slate-600 underline">Clear</button>
+      <p v-if="file" class="text-xs text-slate-500 dark:text-slate-400">
+        Selected: <span class="font-medium text-slate-700 dark:text-slate-200">{{ file.name }}</span>
+        <button @click="clearFile" class="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline">Clear</button>
       </p>
     </div>
 
-    <div v-if="error" class="flex items-start gap-2 bg-red-50 border border-red-100 text-red-700 rounded-xl px-3 py-2.5 mb-3" role="alert">
+    <div v-if="error" class="flex items-start gap-2 bg-red-50 dark:bg-red-500/15 border border-red-100 dark:border-white/10 text-red-700 dark:text-red-300 rounded-xl px-3 py-2.5 mb-3" role="alert">
       <span class="shrink-0 mt-0.5" aria-hidden="true">⚠</span>
       <p class="text-sm flex-1 min-w-0 break-words">{{ error }}</p>
-      <button @click="error=''" aria-label="Dismiss error" class="shrink-0 grid place-items-center w-8 h-8 -my-1 -mr-1 rounded-full hover:bg-red-100">✕</button>
+      <button @click="error=''" aria-label="Dismiss error" class="shrink-0 grid place-items-center w-8 h-8 -my-1 -mr-1 rounded-full hover:bg-red-100 dark:hover:bg-red-500/25">✕</button>
     </div>
-    <div v-if="msg" class="flex items-start gap-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl px-3 py-2.5 mb-3" role="status">
+    <div v-if="msg" class="flex items-start gap-2 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-100 dark:border-white/10 text-emerald-700 dark:text-emerald-300 rounded-xl px-3 py-2.5 mb-3" role="status">
       <span class="shrink-0 mt-0.5" aria-hidden="true">✓</span>
       <p class="text-sm flex-1 min-w-0 break-words">{{ msg }}</p>
-      <button @click="msg=''" aria-label="Dismiss message" class="shrink-0 grid place-items-center w-8 h-8 -my-1 -mr-1 rounded-full hover:bg-emerald-100">✕</button>
+      <button @click="msg=''" aria-label="Dismiss message" class="shrink-0 grid place-items-center w-8 h-8 -my-1 -mr-1 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-500/25">✕</button>
     </div>
 
-    <div v-if="!docs.length && !error" class="grid place-items-center text-center py-10 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-      <div class="grid place-items-center w-12 h-12 rounded-xl bg-white border border-slate-200 text-indigo-400 mb-3" aria-hidden="true">
+    <div v-if="!docs.length && !error" class="grid place-items-center text-center py-10 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50/50 dark:bg-slate-800/60">
+      <div class="grid place-items-center w-12 h-12 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-indigo-400 mb-3" aria-hidden="true">
         <svg viewBox="0 0 20 20" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 2.5h6l4 4v11H5z"/><path d="M11 2.5v4h4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 11h6M7 14h4" stroke-linecap="round"/></svg>
       </div>
-      <p class="text-sm font-medium text-slate-600">No documents</p>
+      <p class="text-sm font-medium text-slate-600 dark:text-slate-300">No documents</p>
       <p class="text-xs text-slate-400 mt-1 max-w-sm">Choose a scope above and upload a file, or drop it in the zone. Supported files are chunked and indexed for retrieval.</p>
     </div>
 
     <template v-if="docs.length">
-      <div class="hidden md:block overflow-x-auto rounded-xl border border-slate-100">
+      <div class="hidden md:block overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
         <table class="w-full text-sm">
           <caption class="sr-only">Documents for selected scope</caption>
-          <thead class="bg-slate-50 text-left text-slate-500 border-b border-slate-100">
+          <thead class="bg-slate-50 dark:bg-slate-800 text-left text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700">
             <tr>
               <th scope="col" class="py-2.5 px-3 font-medium">File</th>
               <th scope="col" class="py-2.5 px-3 font-medium">Scope</th>
@@ -85,26 +85,26 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="d in docs" :key="d.id" class="border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors">
-              <td class="py-2.5 px-3 font-medium text-slate-700">
+            <tr v-for="d in docs" :key="d.id" class="border-b border-slate-100 dark:border-slate-700 last:border-0 hover:bg-slate-50/70 dark:hover:bg-slate-800/70 transition-colors">
+              <td class="py-2.5 px-3 font-medium text-slate-700 dark:text-slate-200">
                 <span class="truncate max-w-[16rem] inline-block align-middle" :title="d.filename">{{ d.filename }}</span>
               </td>
-              <td class="py-2.5 px-3 text-slate-500 truncate max-w-[10rem]" :title="d.scope || (d.account_id || 'internal')">{{ d.scope || (d.account_id || 'internal') }}</td>
-              <td class="py-2.5 px-3 text-slate-500 tabular-nums">v{{ d.version ?? 1 }}</td>
+              <td class="py-2.5 px-3 text-slate-500 dark:text-slate-400 truncate max-w-[10rem]" :title="d.scope || (d.account_id || 'internal')">{{ d.scope || (d.account_id || 'internal') }}</td>
+              <td class="py-2.5 px-3 text-slate-500 dark:text-slate-400 tabular-nums">v{{ d.version ?? 1 }}</td>
               <td class="py-2.5 px-3">
-                <span v-if="d.category" class="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700">{{ d.category }}</span>
+                <span v-if="d.category" class="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300">{{ d.category }}</span>
                 <span v-else class="text-slate-300">—</span>
               </td>
               <td class="py-2.5 px-3">
-                <span class="px-2 py-1 rounded-full text-xs font-medium" :class="d.status === 'ready' ? 'bg-emerald-50 text-emerald-700' : d.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'">{{ d.status }}</span>
-                <p v-if="d.status === 'failed'" class="text-xs text-red-600 mt-1 max-w-xs truncate" :title="d.error || 'Processing failed with no further detail.'">{{ d.error || 'Processing failed.' }}</p>
+                <span class="px-2 py-1 rounded-full text-xs font-medium" :class="d.status === 'ready' ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : d.status === 'failed' ? 'bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300' : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300'">{{ d.status }}</span>
+                <p v-if="d.status === 'failed'" class="text-xs text-red-600 dark:text-red-400 mt-1 max-w-xs truncate" :title="d.error || 'Processing failed with no further detail.'">{{ d.error || 'Processing failed.' }}</p>
               </td>
               <td class="py-2.5 px-3 text-right">
                 <div class="inline-flex items-center gap-1.5">
-                  <button @click="openView(d.id, $event)" :aria-label="`View ${d.filename}`" class="min-h-9 px-3 py-1.5 rounded-full text-xs font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">View</button>
-                  <button @click="pickReplace(d.id)" :aria-label="`Replace ${d.filename}`" class="min-h-9 px-3 py-1.5 rounded-full text-xs font-medium border border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">Replace</button>
-                  <button @click="openTransfer(d)" :aria-label="`Transfer ${d.filename}`" class="min-h-9 px-3 py-1.5 rounded-full text-xs font-medium border border-amber-100 bg-amber-50 text-amber-700 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-600">Transfer</button>
-                  <button @click="requestDelete(d)" :aria-label="`Delete ${d.filename}`" class="min-h-9 px-3 py-1.5 rounded-full text-xs font-medium border border-red-100 bg-red-50 text-red-700 hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600">Delete</button>
+                  <button @click="openView(d.id, $event)" :aria-label="`View ${d.filename}`" class="min-h-9 px-3 py-1.5 rounded-full text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">View</button>
+                  <button @click="pickReplace(d.id)" :aria-label="`Replace ${d.filename}`" class="min-h-9 px-3 py-1.5 rounded-full text-xs font-medium border border-indigo-100 dark:border-white/10 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">Replace</button>
+                  <button @click="openTransfer(d)" :aria-label="`Transfer ${d.filename}`" class="min-h-9 px-3 py-1.5 rounded-full text-xs font-medium border border-amber-100 dark:border-white/10 bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-600">Transfer</button>
+                  <button @click="requestDelete(d)" :aria-label="`Delete ${d.filename}`" class="min-h-9 px-3 py-1.5 rounded-full text-xs font-medium border border-red-100 dark:border-white/10 bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600">Delete</button>
                 </div>
               </td>
             </tr>
@@ -113,23 +113,23 @@
       </div>
 
       <ul class="md:hidden space-y-3" role="list" aria-label="Documents">
-        <li v-for="d in docs" :key="d.id" class="border border-slate-200 rounded-xl p-3 bg-white">
+        <li v-for="d in docs" :key="d.id" class="border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900">
           <div class="flex items-start justify-between gap-2">
-            <p class="font-medium text-slate-800 text-sm truncate min-w-0 flex-1" :title="d.filename">{{ d.filename }}</p>
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium shrink-0" :class="d.status === 'ready' ? 'bg-emerald-50 text-emerald-700' : d.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'">{{ d.status }}</span>
+            <p class="font-medium text-slate-800 dark:text-slate-100 text-sm truncate min-w-0 flex-1" :title="d.filename">{{ d.filename }}</p>
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium shrink-0" :class="d.status === 'ready' ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : d.status === 'failed' ? 'bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300' : 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300'">{{ d.status }}</span>
           </div>
           <dl class="mt-2 grid grid-cols-2 gap-2 text-xs">
-            <div><dt class="text-slate-400">Scope</dt><dd class="text-slate-600 truncate">{{ d.scope || (d.account_id || 'internal') }}</dd></div>
-            <div><dt class="text-slate-400">Version</dt><dd class="text-slate-600 tabular-nums">v{{ d.version ?? 1 }}</dd></div>
-            <div><dt class="text-slate-400">Category</dt><dd class="text-slate-600 truncate">{{ d.category || '—' }}</dd></div>
-            <div><dt class="text-slate-400">Status</dt><dd class="text-slate-600 truncate">{{ d.status }}</dd></div>
+            <div><dt class="text-slate-400">Scope</dt><dd class="text-slate-600 dark:text-slate-300 truncate">{{ d.scope || (d.account_id || 'internal') }}</dd></div>
+            <div><dt class="text-slate-400">Version</dt><dd class="text-slate-600 dark:text-slate-300 tabular-nums">v{{ d.version ?? 1 }}</dd></div>
+            <div><dt class="text-slate-400">Category</dt><dd class="text-slate-600 dark:text-slate-300 truncate">{{ d.category || '—' }}</dd></div>
+            <div><dt class="text-slate-400">Status</dt><dd class="text-slate-600 dark:text-slate-300 truncate">{{ d.status }}</dd></div>
           </dl>
-          <p v-if="d.status === 'failed'" class="text-xs text-red-600 mt-2 break-words">{{ d.error || 'Processing failed.' }}</p>
+          <p v-if="d.status === 'failed'" class="text-xs text-red-600 dark:text-red-400 mt-2 break-words">{{ d.error || 'Processing failed.' }}</p>
           <div class="mt-3 grid grid-cols-2 gap-2">
-            <button @click="openView(d.id, $event)" :aria-label="`View ${d.filename}`" class="min-h-11 rounded-full border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">View</button>
-            <button @click="pickReplace(d.id)" :aria-label="`Replace ${d.filename}`" class="min-h-11 rounded-full border border-indigo-100 bg-indigo-50 text-xs font-medium text-indigo-700 hover:bg-indigo-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">Replace</button>
-            <button @click="openTransfer(d)" :aria-label="`Transfer ${d.filename}`" class="min-h-11 rounded-full border border-amber-100 bg-amber-50 text-xs font-medium text-amber-700 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-600">Transfer</button>
-            <button @click="requestDelete(d)" :aria-label="`Delete ${d.filename}`" class="min-h-11 rounded-full border border-red-100 bg-red-50 text-xs font-medium text-red-700 hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600">Delete</button>
+            <button @click="openView(d.id, $event)" :aria-label="`View ${d.filename}`" class="min-h-11 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">View</button>
+            <button @click="pickReplace(d.id)" :aria-label="`Replace ${d.filename}`" class="min-h-11 rounded-full border border-indigo-100 dark:border-white/10 bg-indigo-50 dark:bg-indigo-500/15 text-xs font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">Replace</button>
+            <button @click="openTransfer(d)" :aria-label="`Transfer ${d.filename}`" class="min-h-11 rounded-full border border-amber-100 dark:border-white/10 bg-amber-50 dark:bg-amber-500/15 text-xs font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-600">Transfer</button>
+            <button @click="requestDelete(d)" :aria-label="`Delete ${d.filename}`" class="min-h-11 rounded-full border border-red-100 dark:border-white/10 bg-red-50 dark:bg-red-500/15 text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600">Delete</button>
           </div>
         </li>
       </ul>
@@ -138,69 +138,69 @@
     <input ref="replaceInput" type="file" class="hidden" aria-hidden="true" tabindex="-1" @change="onReplaceFile" />
 
     <dialog ref="viewDialog" class="p-0 bg-transparent max-w-none w-full max-h-none h-full backdrop:bg-slate-900/50 open:grid open:place-items-center open:p-4 overscroll-contain" @close="onViewClosed" @click="onViewBackdropClick">
-      <div class="bg-white rounded-2xl shadow-pop w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
-        <div class="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-100">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-pop w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div class="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-100 dark:border-slate-700">
           <div class="min-w-0">
-            <h3 id="doc-view-title" class="font-semibold text-slate-800 truncate">{{ viewing?.filename || 'Document' }}</h3>
+            <h3 id="doc-view-title" class="font-semibold text-slate-800 dark:text-slate-100 truncate">{{ viewing?.filename || 'Document' }}</h3>
             <p v-if="viewing" class="text-xs text-slate-400 mt-0.5">
               {{ viewing.account_id || 'internal' }} · v{{ viewing.version ?? 1 }} · {{ viewing.chunk_count }} chunk{{ viewing.chunk_count === 1 ? '' : 's' }}
             </p>
           </div>
-          <button @click="closeView" aria-label="Close document view" class="shrink-0 grid place-items-center w-10 h-10 rounded-full hover:bg-slate-100 text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">✕</button>
+          <button @click="closeView" aria-label="Close document view" class="shrink-0 grid place-items-center w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">✕</button>
         </div>
         <div class="px-5 py-4 overflow-y-auto scroll-slim space-y-4">
-          <p v-if="viewingError" class="text-sm text-red-600" role="alert">{{ viewingError }}</p>
+          <p v-if="viewingError" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ viewingError }}</p>
           <div v-else-if="!viewing" class="text-sm text-slate-400">Loading…</div>
           <template v-else>
             <dl class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-              <div><dt class="text-xs text-slate-400">Status</dt><dd class="text-slate-700">{{ viewing.status }}</dd></div>
-              <div><dt class="text-xs text-slate-400">Category</dt><dd class="text-slate-700">{{ viewing.category || '—' }}</dd></div>
-              <div><dt class="text-xs text-slate-400">Version</dt><dd class="text-slate-700">v{{ viewing.version ?? 1 }}</dd></div>
-              <div><dt class="text-xs text-slate-400">Scope</dt><dd class="text-slate-700">{{ viewing.account_id || 'internal' }}</dd></div>
-              <div><dt class="text-xs text-slate-400">Uploaded by</dt><dd class="text-slate-700 truncate">{{ viewing.uploaded_by || '—' }}</dd></div>
-              <div><dt class="text-xs text-slate-400">Created</dt><dd class="text-slate-700">{{ timeAgo(viewing.created_at) }}</dd></div>
-              <div><dt class="text-xs text-slate-400">Updated</dt><dd class="text-slate-700">{{ timeAgo(viewing.updated_at) }}</dd></div>
+              <div><dt class="text-xs text-slate-400">Status</dt><dd class="text-slate-700 dark:text-slate-200">{{ viewing.status }}</dd></div>
+              <div><dt class="text-xs text-slate-400">Category</dt><dd class="text-slate-700 dark:text-slate-200">{{ viewing.category || '—' }}</dd></div>
+              <div><dt class="text-xs text-slate-400">Version</dt><dd class="text-slate-700 dark:text-slate-200">v{{ viewing.version ?? 1 }}</dd></div>
+              <div><dt class="text-xs text-slate-400">Scope</dt><dd class="text-slate-700 dark:text-slate-200">{{ viewing.account_id || 'internal' }}</dd></div>
+              <div><dt class="text-xs text-slate-400">Uploaded by</dt><dd class="text-slate-700 dark:text-slate-200 truncate">{{ viewing.uploaded_by || '—' }}</dd></div>
+              <div><dt class="text-xs text-slate-400">Created</dt><dd class="text-slate-700 dark:text-slate-200">{{ timeAgo(viewing.created_at) }}</dd></div>
+              <div><dt class="text-xs text-slate-400">Updated</dt><dd class="text-slate-700 dark:text-slate-200">{{ timeAgo(viewing.updated_at) }}</dd></div>
             </dl>
-            <p v-if="viewing.error" class="text-sm text-red-600">{{ viewing.error }}</p>
+            <p v-if="viewing.error" class="text-sm text-red-600 dark:text-red-400">{{ viewing.error }}</p>
             <div>
               <p class="text-xs text-slate-400 mb-1.5">
                 Extracted text
                 <span v-if="viewing.truncated">— showing {{ viewing.chunks.length }} of {{ viewing.chunk_count }} chunks</span>
               </p>
-              <pre class="text-xs leading-relaxed whitespace-pre-wrap break-words bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-72 overflow-y-auto scroll-slim text-slate-700">{{ viewing.chunks.join('\n\n') || '(no extracted text)' }}</pre>
+              <pre class="text-xs leading-relaxed whitespace-pre-wrap break-words bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 max-h-72 overflow-y-auto scroll-slim text-slate-700 dark:text-slate-200">{{ viewing.chunks.join('\n\n') || '(no extracted text)' }}</pre>
             </div>
           </template>
         </div>
-        <div class="px-5 py-3 border-t border-slate-100 flex justify-end">
-          <button @click="closeView" class="min-h-11 rounded-full bg-slate-900 text-white px-5 py-2 text-sm font-medium hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">Close</button>
+        <div class="px-5 py-3 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+          <button @click="closeView" class="min-h-11 rounded-full bg-slate-900 dark:bg-slate-700 text-white px-5 py-2 text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">Close</button>
         </div>
       </div>
     </dialog>
 
     <dialog ref="confirmDialog" class="p-0 bg-transparent max-w-none backdrop:bg-slate-900/50 open:grid open:place-items-center open:p-4" @close="onConfirmClosed">
-      <form method="dialog" class="bg-white rounded-2xl shadow-pop w-full max-w-md p-5">
-        <h3 class="font-semibold text-slate-800">{{ confirmTitle }}</h3>
-        <p class="text-sm text-slate-600 mt-1.5 break-words">{{ confirmMessage }}</p>
+      <form method="dialog" class="bg-white dark:bg-slate-900 rounded-2xl shadow-pop w-full max-w-md p-5">
+        <h3 class="font-semibold text-slate-800 dark:text-slate-100">{{ confirmTitle }}</h3>
+        <p class="text-sm text-slate-600 dark:text-slate-300 mt-1.5 break-words">{{ confirmMessage }}</p>
         <div class="mt-5 flex justify-end gap-2">
-          <button type="button" @click="cancelConfirm" class="min-h-11 rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600" autofocus>Cancel</button>
+          <button type="button" @click="cancelConfirm" class="min-h-11 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600" autofocus>Cancel</button>
           <button type="button" @click="doConfirm" class="min-h-11 rounded-full px-5 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" :class="confirmVariant === 'danger' ? 'bg-red-600 text-white hover:bg-red-700 focus-visible:outline-red-600' : 'bg-indigo-600 text-white hover:bg-indigo-700 focus-visible:outline-indigo-600'">{{ confirmActionLabel }}</button>
         </div>
       </form>
     </dialog>
 
     <dialog ref="transferDialog" class="p-0 bg-transparent max-w-none backdrop:bg-slate-900/50 open:grid open:place-items-center open:p-4" @close="onTransferClosed">
-      <form method="dialog" class="bg-white rounded-2xl shadow-pop w-full max-w-md p-5" @submit.prevent="doTransfer">
-        <h3 class="font-semibold text-slate-800">Transfer document</h3>
-        <p class="text-sm text-slate-600 mt-1.5 break-words">Move "{{ transferDoc?.filename }}" to another account you have access to.</p>
-        <label class="block mt-4 text-sm font-medium text-slate-700">Target account
-          <select v-model="transferTarget" class="mt-1 w-full min-h-11 border border-slate-200 rounded-full px-4 py-2.5 bg-white text-sm focus:border-indigo-500">
+      <form method="dialog" class="bg-white dark:bg-slate-900 rounded-2xl shadow-pop w-full max-w-md p-5" @submit.prevent="doTransfer">
+        <h3 class="font-semibold text-slate-800 dark:text-slate-100">Transfer document</h3>
+        <p class="text-sm text-slate-600 dark:text-slate-300 mt-1.5 break-words">Move "{{ transferDoc?.filename }}" to another account you have access to.</p>
+        <label class="block mt-4 text-sm font-medium text-slate-700 dark:text-slate-200">Target account
+          <select v-model="transferTarget" class="mt-1 w-full min-h-11 border border-slate-200 dark:border-slate-700 rounded-full px-4 py-2.5 bg-white dark:bg-slate-900 text-sm focus:border-indigo-500">
             <option value="">Select account</option>
             <option v-for="a in transferOptions" :key="a.id" :value="a.id">{{ a.name }}</option>
           </select>
         </label>
-        <p v-if="transferOptions.length === 0" class="text-xs text-amber-600 mt-2">No other accounts available.</p>
+        <p v-if="transferOptions.length === 0" class="text-xs text-amber-600 dark:text-amber-400 mt-2">No other accounts available.</p>
         <div class="mt-5 flex justify-end gap-2">
-          <button type="button" @click="closeTransfer" class="min-h-11 rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="button" @click="closeTransfer" class="min-h-11 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
           <button type="submit" :disabled="!transferTarget || transferring" class="min-h-11 rounded-full px-5 py-2 text-sm font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 inline-flex items-center gap-2">
             <svg v-if="transferring" viewBox="0 0 20 20" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3a7 7 0 1 0 7 7" stroke-linecap="round"/></svg>
             Transfer

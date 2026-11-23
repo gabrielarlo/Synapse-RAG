@@ -1,42 +1,42 @@
 <template>
-  <div class="bg-white flex flex-col h-full">
+  <div class="bg-white dark:bg-slate-900 flex flex-col h-full">
     <p class="text-xs text-slate-400 truncate px-4 pt-2">{{ scopeLabel }}</p>
     <div class="min-w-0 flex flex-col flex-1 min-h-0">
-    <div class="flex items-center gap-2 px-4 py-2 border-b border-slate-100">
-      <select ref="scopeSelect" v-model="accountId" aria-label="Account" :disabled="internal" class="flex-1 min-w-0 border border-slate-200 rounded-full px-3 py-1.5 text-xs bg-white focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400">
+    <div class="flex items-center gap-2 px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+      <select ref="scopeSelect" v-model="accountId" aria-label="Account" :disabled="internal" class="flex-1 min-w-0 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-xs bg-white dark:bg-slate-900 focus:border-indigo-500 disabled:bg-slate-50 dark:disabled:bg-slate-800 disabled:text-slate-400">
         <option value="">Account…</option>
         <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
       </select>
-      <label class="flex items-center gap-1 text-xs text-slate-600 shrink-0">
+      <label class="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 shrink-0">
         <input type="checkbox" v-model="internal" class="w-3.5 h-3.5 accent-indigo-600" /> internal
       </label>
-      <button @click="newSession" aria-label="New chat" class="shrink-0 grid place-items-center w-7 h-7 rounded-full hover:bg-slate-100 text-slate-500"><svg viewBox="0 0 20 20" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3v14M3 10h14" stroke-linecap="round"/></svg></button>
+      <button @click="newSession" aria-label="New chat" class="shrink-0 grid place-items-center w-7 h-7 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"><svg viewBox="0 0 20 20" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3v14M3 10h14" stroke-linecap="round"/></svg></button>
     </div>
     <div
       ref="thread"
       @scroll="onScroll"
       aria-live="polite"
-      class="scroll-slim px-4 py-3 flex-1 min-h-0 overflow-y-auto space-y-3 bg-white"
+      class="scroll-slim px-4 py-3 flex-1 min-h-0 overflow-y-auto space-y-3 bg-white dark:bg-slate-900"
     >
       <div v-for="(m, i) in messages" :key="i" class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
         <div class="max-w-[82%] min-w-0">
           <div
-            :class="m.role === 'user' ? 'bg-indigo-600 text-white rounded-2xl rounded-br-md' : 'bg-slate-100 text-slate-800 rounded-2xl rounded-bl-md'"
+            :class="m.role === 'user' ? 'bg-indigo-600 text-white rounded-2xl rounded-br-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-2xl rounded-bl-md'"
             class="px-3.5 py-2 text-sm whitespace-pre-wrap break-words leading-relaxed"
           >
             {{ m.text }}
           </div>
           <div class="flex flex-wrap items-center gap-1.5 mt-1" :class="m.role === 'user' ? 'justify-end' : ''">
             <span class="text-[11px] text-slate-400">{{ m.time }}</span>
-            <span v-if="m.escalated" class="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium">escalated{{ m.department ? ` → ${m.department}` : '' }}</span>
+            <span v-if="m.escalated" class="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 font-medium">escalated{{ m.department ? ` → ${m.department}` : '' }}</span>
             <span v-else-if="m.category" class="text-[11px] text-slate-400">{{ m.category }}</span>
           </div>
-          <p v-if="m.notice" class="text-xs text-amber-600 mt-1">{{ m.notice }}</p>
+          <p v-if="m.notice" class="text-xs text-amber-600 dark:text-amber-400 mt-1">{{ m.notice }}</p>
           <A2UIRenderer v-if="m.a2ui" :surface="m.a2ui" @action="onA2UIAction" />
         </div>
       </div>
       <div v-if="loading" class="flex items-center" aria-live="polite">
-        <span class="flex gap-1 bg-slate-100 rounded-2xl rounded-bl-md px-3.5 py-3">
+        <span class="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-bl-md px-3.5 py-3">
           <span class="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"></span>
           <span class="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style="animation-delay: 150ms"></span>
           <span class="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style="animation-delay: 300ms"></span>
@@ -44,12 +44,12 @@
       </div>
       <div v-if="!messages.length && !loading" class="h-full grid place-content-center text-center px-4">
         <svg viewBox="0 0 48 48" class="w-12 h-12 mx-auto mb-3 text-indigo-300" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12a6 6 0 0 1 6-6h20a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H20l-9 8V12Z"/><circle cx="18" cy="18" r="1.5" fill="currentColor"/><circle cx="25" cy="18" r="1.5" fill="currentColor"/><circle cx="32" cy="18" r="1.5" fill="currentColor"/></svg>
-        <p class="text-sm text-slate-500 font-medium">{{ emptyTitle }}</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">{{ emptyTitle }}</p>
         <p class="text-xs text-slate-400 mt-1">{{ emptyHint }}</p>
         <button v-if="!internal && !accountId" @click="focusScope" class="mt-3 bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-indigo-700">Choose account</button>
       </div>
     </div>
-    <form @submit.prevent="send" class="flex gap-2 items-end px-4 pb-3 pt-2 border-t border-slate-100 bg-white">
+    <form @submit.prevent="send" class="flex gap-2 items-end px-4 pb-3 pt-2 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900">
       <label id="composer-hint" class="sr-only">Type a question. Enter sends, Shift+Enter adds a new line.</label>
       <textarea
         v-model="question"
@@ -57,7 +57,7 @@
         :disabled="loading"
         aria-describedby="composer-hint"
         rows="1"
-        class="border border-slate-200 rounded-full px-4 py-2.5 flex-1 focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400 resize-none"
+        class="border border-slate-200 dark:border-slate-700 rounded-full px-4 py-2.5 flex-1 focus:border-indigo-500 disabled:bg-slate-50 dark:disabled:bg-slate-800 disabled:text-slate-400 resize-none"
         @keydown.enter.exact.prevent="send"
       />
       <button
@@ -69,7 +69,7 @@
         <svg v-else viewBox="0 0 20 20" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10h12M11 5l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </form>
-    <p v-if="error" class="px-4 pb-2 text-sm text-red-600" role="alert">{{ error }}</p>
+    <p v-if="error" class="px-4 pb-2 text-sm text-red-600 dark:text-red-400" role="alert">{{ error }}</p>
     </div>
   </div>
 </template>

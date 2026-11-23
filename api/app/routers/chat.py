@@ -42,7 +42,7 @@ def chat(body: ChatIn, request: Request, user: User = Depends(authed)):
             a2ui = build_audit_surface(session_id=sid, question=body.question, answer=text, events=events, scope_label=scope_label)
         else:
             a2ui = None
-        # persist even refusals so history reflects the refusal (category audit excluded from list_sessions counts)
+        # persist even refusals so history reflects the refusal (audit turns count in list_sessions)
         c["sessions"].assistant_message(sid, text, category="audit", a2ui=a2ui)
         c["store"].log(actor=user.username, action="audit_question",
                         account_id=scope.account_id, detail=body.question[:200])
@@ -140,3 +140,24 @@ def session_history(session_id: str, request: Request,
         resolve_scope(request, bound_account, user)
     return {"session_id": session_id,
             "turns": c["sessions"].list_turns(session_id)}
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(session_id: str, request: Request,
+                   user: User = Depends(authed)):
+    """Permanently delete a session owned by the caller. Access mirrors the
+    history endpoint: owner-only, plus account membership when account-scoped."""
+    c = request.app.state.ctx
+    row = c["sessions"].get_session(session_id)
+    if row is None:
+        raise HTTPException(404, "unknown session")
+    bound_user, bound_account, _ = row
+    if bound_user != user.id:
+        raise HTTPException(403, "session belongs to another user or account")
+    if bound_account:
+        resolve_scope(request, bound_account, user)
+    c["sessions"].delete_session(session_id)
+    c["store"].log(actor=user.username, action="delete",
+                   account_id=bound_account or None,
+                   detail=f"session {session_id}")
+    return {"deleted": session_id}

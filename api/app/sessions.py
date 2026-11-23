@@ -108,6 +108,20 @@ class SessionStore:
                 "SELECT user_id, account_id, last_active FROM sessions"
                 " WHERE session_id=?", (session_id,)).fetchone()
 
+    def delete_session(self, session_id: str) -> None:
+        """Permanently remove a session and all of its turns/metadata.
+        No FK cascade exists, so child rows are deleted explicitly first."""
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM session_meta WHERE turn_id IN"
+                " (SELECT rowid FROM session_turns WHERE session_id=?)",
+                (session_id,))
+            self._conn.execute("DELETE FROM session_turns WHERE session_id=?",
+                               (session_id,))
+            self._conn.execute("DELETE FROM sessions WHERE session_id=?",
+                               (session_id,))
+            self._conn.commit()
+
     def list_turns(self, session_id: str, limit: int = 100) -> list[dict]:
         """Latest turns for restoring a persisted thread (chronological).
 
@@ -143,10 +157,10 @@ class SessionStore:
             return out
 
     def list_sessions(self, user_id: str, limit: int = 20) -> list[dict]:
-        """User sessions, newest first, limited. Count/preview
-        exclude audit artifacts (user 'audit: ' + assistant category='audit');
-        audit-only sessions get preview='' count=0. Read-only: never touches
-        last_active, never resurrects. History shows all (limited), not TTL-filtered."""
+        """User sessions, newest first, limited. Count/preview reflect every
+        persisted turn, including audit exchanges, so the row matches the thread
+        shown on open. Read-only: never touches last_active, never resurrects.
+        History shows all (limited), not TTL-filtered."""
         limit = max(1, min(50, limit))
         with self._lock:
             rows = self._conn.execute(
@@ -159,12 +173,9 @@ class SessionStore:
                     "SELECT t.role, t.content, m.category FROM session_turns t"
                     " LEFT JOIN session_meta m ON m.turn_id=t.rowid"
                     " WHERE t.session_id=? ORDER BY t.rowid ASC", (sid,)).fetchall()
-                non_audit = [t for t in turns
-                             if not ((t[0] == 'user' and (t[1] or '').startswith('audit: '))
-                                     or t[2] == 'audit')]
-                preview = next((t[1][:80] for t in non_audit if t[0] == 'user' and t[1]), '')
+                preview = next((t[1][:80] for t in turns if t[0] == 'user' and t[1]), '')
                 out.append({"session_id": sid, "account_id": acct,
-                            "last_active": last, "count": len(non_audit),
+                            "last_active": last, "count": len(turns),
                             "preview": preview})
             return out
 

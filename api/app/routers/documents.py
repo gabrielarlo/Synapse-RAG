@@ -68,6 +68,8 @@ async def upload(request: Request, account_id: str | None = None,
         res = c["store"].create_document(file.filename or "upload",
                                          account_id, internal, user.id)
     except ValueError as e:
+        if str(e) == "account archived":
+            raise HTTPException(403, "account archived")
         raise HTTPException(422, str(e))
     c["store"].log(actor=user.username, action="upload",
                    account_id=account_id, detail=file.filename)
@@ -102,6 +104,8 @@ def replace(document_id: str, request: Request, filename: str | None = None,
     doc = store.get_document(did)
     if doc is None:
         raise HTTPException(404, "unknown document")
+    if doc.get("account_id") and store.is_archived(doc["account_id"]):
+        raise HTTPException(403, "account archived")
     _authorize(store, user, doc)
 
     with _lock_for(did):
@@ -138,6 +142,13 @@ def replace(document_id: str, request: Request, filename: str | None = None,
             res = store.replace_document(did, filename)
             if res is None:
                 raise HTTPException(404, "unknown document")
+        except ValueError as e:
+            if str(e) == "account archived":
+                _unlink(dest)
+                if backup:
+                    _unlink(backup)
+                raise HTTPException(403, "account archived")
+            raise
         except HTTPException:
             # document vanished under us: nothing to keep
             _unlink(dest)
@@ -170,8 +181,12 @@ def transfer(document_id: str, body: TransferIn, request: Request,
     doc = store.get_document(did)
     if doc is None:
         raise HTTPException(404, "unknown document")
+    if doc.get("account_id") and store.is_archived(doc["account_id"]):
+        raise HTTPException(403, "account archived")
     _authorize(store, user, doc)
     target = body.target_account_id
+    if store.is_archived(target):
+        raise HTTPException(403, "account archived")
     # validate target account exists and user has access to it
     if not store.account_exists(target):
         raise HTTPException(404, "target account not found")
@@ -181,6 +196,8 @@ def transfer(document_id: str, body: TransferIn, request: Request,
         try:
             res = store.transfer_document(did, target)
         except ValueError as e:
+            if str(e) == "account archived":
+                raise HTTPException(403, "account archived")
             raise HTTPException(422, str(e))
         if res is None:
             raise HTTPException(404, "unknown document")

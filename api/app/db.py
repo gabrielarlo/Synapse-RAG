@@ -23,6 +23,11 @@ def _is_uuid(v: str) -> bool:
     return bool(_UUID_RE.match(v))
 
 
+def _not_archived(account_col: str) -> str:
+    """Predicate for document/chunk/job reads that must hide archived tenants."""
+    return f"NOT EXISTS (SELECT 1 FROM accounts a WHERE a.id = {account_col} AND a.is_archived)"
+
+
 class PostgresStore:
     def __init__(self, dsn: str, connect_tries: int = 2,
                  connect_delay_s: float = 1.0) -> None:
@@ -80,28 +85,36 @@ class PostgresStore:
                 cur.execute(
                     "INSERT INTO users(username, pw_hash, role, display_name)"
                     " VALUES (%s,%s,%s,%s)"
-                    " RETURNING id, username, pw_hash, role, display_name",
+                    " RETURNING id, username, pw_hash, role, display_name, is_active",
                     (username, pw_hash, role, display_name))
             except psycopg.errors.UniqueViolation:
                 raise ValueError("username taken")
             r = cur.fetchone()
             return User(id=str(r[0]), username=r[1], pw_hash=r[2], role=r[3],
-                        display_name=r[4])
+                        display_name=r[4], is_active=r[5])
 
     def get_user_by_name(self, username: str) -> User | None:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
-            cur.execute("SELECT id, username, pw_hash, role, display_name FROM users"
-                        " WHERE username=%s", (username,))
+            cur.execute("SELECT id, username, pw_hash, role, display_name, is_active"
+                        " FROM users WHERE username=%s", (username,))
             r = cur.fetchone()
             return User(id=str(r[0]), username=r[1], pw_hash=r[2], role=r[3],
-                        display_name=r[4]) if r else None
+                        display_name=r[4], is_active=r[5]) if r else None
 
     def list_users(self) -> list[User]:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
-            cur.execute("SELECT id, username, pw_hash, role, display_name FROM users"
-                        " ORDER BY username")
+            cur.execute("SELECT id, username, pw_hash, role, display_name, is_active"
+                        " FROM users ORDER BY username")
             return [User(id=str(r[0]), username=r[1], pw_hash=r[2], role=r[3],
-                         display_name=r[4]) for r in cur.fetchall()]
+                         display_name=r[4], is_active=r[5]) for r in cur.fetchall()]
+
+    def deactivate_user(self, user_id: str) -> bool:
+        # UUID column rejects arbitrary text with a 500; malformed ids are simply unknown.
+        if not _is_uuid(user_id):
+            return False
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("UPDATE users SET is_active=FALSE WHERE id=%s", (user_id,))
+            return cur.rowcount > 0
 
     def create_account(self, name: str) -> dict:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
@@ -111,19 +124,46 @@ class PostgresStore:
             except psycopg.errors.UniqueViolation:
                 raise ValueError("account exists")
             r = cur.fetchone()
-            return {"id": str(r[0]), "name": r[1]}
+            return {"id": str(r[0]), "name": r[1], "is_archived": False}
 
     def list_accounts(self, scope: Scope) -> list[dict]:
         if scope.is_admin:
             with self._tx(is_admin=True) as conn, conn.cursor() as cur:
-                cur.execute("SELECT id, name FROM accounts ORDER BY name")
-                return [{"id": str(r[0]), "name": r[1]} for r in cur.fetchall()]
+                cur.execute("SELECT id, name, is_archived FROM accounts ORDER BY name")
+                return [{"id": str(r[0]), "name": r[1], "is_archived": r[2]}
+                        for r in cur.fetchall()]
         with self._tx(**self._s(scope)) as conn, conn.cursor() as cur:
             cur.execute(
                 "SELECT a.id, a.name FROM accounts a JOIN staff_accounts s"
-                " ON s.account_id = a.id WHERE s.user_id = %s ORDER BY a.name",
+                " ON s.account_id = a.id WHERE s.user_id = %s AND NOT a.is_archived"
+                " ORDER BY a.name",
                 (scope.user.id,))
-            return [{"id": str(r[0]), "name": r[1]} for r in cur.fetchall()]
+            return [{"id": str(r[0]), "name": r[1], "is_archived": False}
+                    for r in cur.fetchall()]
+
+    def archive_account(self, account_id: str, archived: bool) -> bool | None:
+        """Atomically set archived flag. Returns previous value, or None if not found."""
+        if not _is_uuid(account_id):
+            return None
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("SELECT is_archived FROM accounts WHERE id=%s FOR UPDATE",
+                        (account_id,))
+            r = cur.fetchone()
+            if r is None:
+                return None
+            was = bool(r[0])
+            if was != archived:
+                cur.execute("UPDATE accounts SET is_archived=%s WHERE id=%s",
+                            (archived, account_id))
+            return was
+
+    def is_archived(self, account_id: str) -> bool:
+        if not _is_uuid(account_id):
+            return False
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("SELECT is_archived FROM accounts WHERE id=%s", (account_id,))
+            r = cur.fetchone()
+            return bool(r[0]) if r else False
 
     def user_exists(self, user_id: str) -> bool:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
@@ -156,6 +196,8 @@ class PostgresStore:
                         is_internal: bool, uploaded_by: str) -> dict:
         if account_id is None and not is_internal:
             raise ValueError("scope required")
+        if account_id is not None and self.is_archived(account_id):
+            raise ValueError("account archived")
         with self._tx(account_id, is_admin=True) as conn, conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO documents(account_id, is_internal, filename, uploaded_by)"
@@ -178,7 +220,8 @@ class PostgresStore:
         """Ordered chunk text for the read-only view, capped for payload size."""
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
             cur.execute("SELECT content, count(*) OVER () FROM chunks"
-                        " WHERE document_id=%s ORDER BY ord LIMIT %s",
+                        " WHERE document_id=%s AND " + _not_archived("chunks.account_id")
+                        + " ORDER BY ord LIMIT %s",
                         (document_id, limit))
             rows = cur.fetchall()
             return {"chunks": [r[0] for r in rows],
@@ -197,6 +240,7 @@ class PostgresStore:
         q = ("SELECT id, filename, account_id, is_internal, status, error,"
              " uploaded_by, created_at, updated_at, version, category FROM documents")
         where, args = self._scope_where(scope, "")
+        where += " AND " + _not_archived("documents.account_id")
         with self._tx(**self._s(scope)) as conn, conn.cursor() as cur:
             cur.execute(q + where + " ORDER BY created_at DESC", args)
             return [{"id": str(r[0]), "filename": r[1],
@@ -212,7 +256,7 @@ class PostgresStore:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
             cur.execute("SELECT id, filename, account_id, is_internal, uploaded_by,"
                         " status, version, category, created_at, updated_at"
-                        " FROM documents WHERE id=%s",
+                        " FROM documents WHERE id=%s AND " + _not_archived("documents.account_id"),
                         (document_id,))
             r = cur.fetchone()
             return {"id": str(r[0]), "filename": r[1],
@@ -226,6 +270,10 @@ class PostgresStore:
         """Replace content: bump version (takes the row lock first), drop old
         vectors/jobs, queue a new job carrying the document's scope."""
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("SELECT account_id FROM documents WHERE id=%s", (document_id,))
+            r0 = cur.fetchone()
+            if r0 is not None and r0[0] is not None and self.is_archived(str(r0[0])):
+                raise ValueError("account archived")
             cur.execute(
                 "UPDATE documents SET version=version+1,"
                 " filename=COALESCE(%s, filename), status='queued', error=NULL,"
@@ -253,6 +301,10 @@ class PostgresStore:
             row = cur.fetchone()
             if row is None:
                 return None
+            if row[0] and self.is_archived(str(row[0])):
+                raise ValueError("account archived")
+            if self.is_archived(target_account_id):
+                raise ValueError("account archived")
             if row[0] and str(row[0]) == target_account_id:
                 raise ValueError("already in target account")
             cur.execute("UPDATE documents SET account_id=%s, is_internal=FALSE,"
@@ -289,8 +341,8 @@ class PostgresStore:
                 "SELECT j.id, j.document_id, j.account_id, j.is_internal, j.status,"
                 " j.attempts, d.filename FROM ingestion_jobs j"
                 " JOIN documents d ON d.id = j.document_id"
-                " WHERE j.status='pending' ORDER BY j.created_at"
-                " FOR UPDATE OF j SKIP LOCKED LIMIT 1")
+                " WHERE j.status='pending' AND " + _not_archived("d.account_id")
+                + " ORDER BY j.created_at FOR UPDATE OF j SKIP LOCKED LIMIT 1")
             r = cur.fetchone()
             if not r:
                 return None
@@ -359,6 +411,7 @@ class PostgresStore:
              " d.category FROM chunks c"
              " LEFT JOIN documents d ON d.id = c.document_id")
         where, args = self._scope_where(scope, "c.")
+        where += " AND " + _not_archived("c.account_id")
         q += where + " ORDER BY c.embedding <=> %s::vector LIMIT %s"
         args += ["[" + ",".join(map(str, embedding)) + "]", limit]
         with self._tx(**self._s(scope)) as conn, conn.cursor() as cur:
