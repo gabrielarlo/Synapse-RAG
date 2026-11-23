@@ -16,7 +16,7 @@
       ]"
     >
       <div class="px-3 py-4 flex items-center gap-2.5 border-b border-white/10" :class="sidebarCollapsed ? 'md:justify-center md:px-2' : 'px-5'">
-        <span class="grid place-items-center w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-pop text-white font-bold shrink-0">S</span>
+        <AppLogo size="md" variant="dark" />
         <div v-if="!sidebarCollapsed" class="leading-tight min-w-0 flex-1">
           <p class="text-white font-bold truncate">Synapse RAG</p>
           <p class="text-[11px] text-slate-400 truncate">Knowledge assistant</p>
@@ -122,6 +122,7 @@ import { computed, ref, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import ChatBox from './components/ChatBox.vue'
 import ThemeToggle from './components/ThemeToggle.vue'
+import AppLogo from './components/AppLogo.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -130,9 +131,10 @@ const links = [
   { to: '/documents', label: 'Documents', icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 2.5h6l4 4v11H5z"/><path d="M11 2.5v4h4"/></svg>' },
   { to: '/accounts', label: 'Accounts', icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="6.5" r="3"/><path d="M3.5 17c1-3.5 3.5-5 6.5-5s5.5 1.5 6.5 5"/></svg>' },
   { to: '/staff', label: 'Staff', icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8" r="2"/><path d="M2.5 16c.8-2.8 2.5-4 4.5-4s3.7 1.2 4.5 4M11.5 12.5c2 .2 3.4 1.3 4 3.5"/></svg>' },
-  { to: '/audit', label: 'Audit', icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 2.5 3 5v5c0 4.5 3 7 7 7.5 4-.5 7-3 7-7.5V5z"/><path d="m7.5 10 1.8 1.8L12.8 8"/></svg>' }
+  { to: '/audit', label: 'Audit', icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 2.5 3 5v5c0 4.5 3 7 7 7.5 4-.5 7-3 7-7.5V5z"/><path d="m7.5 10 1.8 1.8L12.8 8"/></svg>' },
+  { to: '/api-docs', label: 'API Docs', icon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6.5h12M8 3.5h4M5 9.5h10v6a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-6Z"/><path d="M7 12h6"/></svg>' }
 ]
-const titles = { '/chat': 'Chat', '/documents': 'Documents', '/accounts': 'Accounts', '/staff': 'Staff', '/audit': 'Audit trail' }
+const titles = { '/chat': 'Chat', '/documents': 'Documents', '/accounts': 'Accounts', '/staff': 'Staff', '/audit': 'Audit trail', '/api-docs': 'External API' }
 const pageTitle = computed(() => titles[route.path] || 'Dashboard')
 const showFab = computed(() => loggedIn.value && route.path !== '/chat')
 const popupOpen = ref(false)

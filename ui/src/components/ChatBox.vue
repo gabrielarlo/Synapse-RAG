@@ -237,7 +237,7 @@ onMounted(async () => {
   scrollDown(true)
   try {
     const { data } = await api.listAccounts()
-    accounts.value = data
+    accounts.value = (Array.isArray(data) ? data : []).filter((a) => !a.is_archived)
   } catch (e) {
     error.value = e.response?.data?.detail || 'Failed to load accounts.'
   }

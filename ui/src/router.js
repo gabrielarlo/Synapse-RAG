@@ -5,6 +5,7 @@ import Staff from './views/Staff.vue'
 import Documents from './views/Documents.vue'
 import Chat from './views/Chat.vue'
 import Audit from './views/Audit.vue'
+import ApiDocs from './views/ApiDocs.vue'
 
 const routes = [
   { path: '/login', component: Login },
@@ -13,7 +14,8 @@ const routes = [
   { path: '/staff', component: Staff },
   { path: '/documents', component: Documents },
   { path: '/chat', component: Chat },
-  { path: '/audit', component: Audit }
+  { path: '/audit', component: Audit },
+  { path: '/api-docs', component: ApiDocs }
 ]
 
 const router = createRouter({

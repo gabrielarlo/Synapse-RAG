@@ -71,8 +71,23 @@ class FaqIn(BaseModel):
     question: str
 
 
+class FaqOut(BaseModel):
+    answer: str
+    category: str = "external_faq"
+    department: str | None = None
+    a2ui: A2UISurface | None = None
+
+
+class CredentialIn(BaseModel):
+    label: str | None = Field(default=None, max_length=64, description="human label for the key")
+    expires_in_days: int | None = Field(default=None, ge=1, le=365, description="days until expiry, default 90")
+
+
 class CredentialOut(BaseModel):
     key_id: str
     account_id: str
     secret: str = ""  # plaintext only at issuance/rotation
     revoked: bool = False
+    label: str | None = None
+    expires_at: str | None = None
+    created_at: str | None = None

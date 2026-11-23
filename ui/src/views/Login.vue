@@ -3,7 +3,7 @@
     <div class="w-full max-w-3xl grid md:grid-cols-2 overflow-hidden rounded-2xl shadow-pop bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-700">
       <div class="hidden md:flex flex-col justify-between p-8 text-white bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-700">
         <div class="flex items-center gap-2.5">
-          <span class="grid place-items-center w-9 h-9 rounded-lg bg-white/20 font-bold">S</span>
+          <AppLogo size="lg" variant="translucent" />
           <p class="font-bold">Synapse RAG</p>
         </div>
         <div>
@@ -41,6 +41,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api.js'
 import BaseInput from '../components/BaseInput.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AppLogo from '../components/AppLogo.vue'
 
 const username = ref('')
 const password = ref('')

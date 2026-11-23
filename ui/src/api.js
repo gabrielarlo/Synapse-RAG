@@ -138,7 +138,12 @@ export const api = {
   listSessions: (params) => client.get('/api/chat/sessions', { params }),
   getSessionHistory: (id) => client.get(`/api/chat/sessions/${id}/history`),
   deleteSession: (id) => client.delete(`/api/chat/sessions/${id}`),
-  listAudit: (params) => client.get('/api/audit', { params })
+  listAudit: (params) => client.get('/api/audit', { params }),
+  listCredentials: (accountId) => client.get(`/api/accounts/${accountId}/credentials`),
+  issueCredential: (accountId, payload = {}) => client.post(`/api/accounts/${accountId}/credentials`, payload || {}),
+  rotateCredential: (keyId) => client.post(`/api/credentials/${keyId}/rotate`),
+  revokeCredential: (keyId) => client.post(`/api/credentials/${keyId}/revoke`),
+  deleteCredential: (keyId) => client.delete(`/api/credentials/${keyId}`)
 }
 
 export default client

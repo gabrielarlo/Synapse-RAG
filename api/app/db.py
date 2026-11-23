@@ -422,35 +422,61 @@ class PostgresStore:
                      "category": r[4]} for r in cur.fetchall()]
 
     # -- external credentials (system lookups run admin-scoped) --
-    def issue_credential(self, account_id: str, secret_hash: str) -> str:
+    def issue_credential(self, account_id: str, secret_hash: str,
+                         label: str | None = None, expires_in_days: int | None = None) -> str:
         import secrets as _s
         key_id = "sk_" + _s.token_urlsafe(9)
+        days = int(expires_in_days) if expires_in_days else 90
         with self._tx(account_id, is_admin=True) as conn, conn.cursor() as cur:
-            cur.execute("INSERT INTO api_credentials(key_id, account_id, secret_hash)"
-                        " VALUES (%s,%s,%s)", (key_id, account_id, secret_hash))
+            cur.execute(
+                "INSERT INTO api_credentials(key_id, account_id, secret_hash, label, expires_at)"
+                " VALUES (%s,%s,%s,%s, now() + make_interval(days => %s))",
+                (key_id, account_id, secret_hash, label, days))
             return key_id
 
     def get_credential(self, key_id: str) -> dict | None:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
-            cur.execute("SELECT key_id, account_id, secret_hash, revoked, created_at"
+            cur.execute("SELECT key_id, account_id, secret_hash, revoked, created_at, label, expires_at"
                         " FROM api_credentials WHERE key_id=%s", (key_id,))
             r = cur.fetchone()
+            if not r:
+                return None
             return {"key_id": r[0], "account_id": str(r[1]), "secret_hash": r[2],
-                    "revoked": r[3], "created_at": r[4].isoformat()} if r else None
+                    "revoked": r[3], "created_at": r[4].isoformat() if r[4] else None,
+                    "label": r[5], "expires_at": r[6].isoformat() if r[6] else None}
+
+    def list_credentials(self, account_id: str) -> list[dict]:
+        if not _is_uuid(account_id):
+            return []
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("SELECT key_id, account_id, revoked, created_at, label, expires_at"
+                        " FROM api_credentials WHERE account_id=%s ORDER BY created_at DESC",
+                        (account_id,))
+            return [{"key_id": r[0], "account_id": str(r[1]), "revoked": r[2],
+                     "created_at": r[3].isoformat() if r[3] else None,
+                     "label": r[4], "expires_at": r[5].isoformat() if r[5] else None}
+                    for r in cur.fetchall()]
 
     def rotate_credential(self, key_id: str, new_hash: str) -> dict:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
             cur.execute("UPDATE api_credentials SET secret_hash=%s, revoked=FALSE"
-                        " WHERE key_id=%s RETURNING key_id, account_id, created_at",
+                        " WHERE key_id=%s RETURNING key_id, account_id, created_at, label, expires_at",
                         (new_hash, key_id))
             r = cur.fetchone()
             return {"key_id": r[0], "account_id": str(r[1]),
-                    "created_at": r[2].isoformat()}
+                    "created_at": r[2].isoformat() if r[2] else None,
+                    "label": r[3],
+                    "expires_at": r[4].isoformat() if r[4] else None}
 
     def revoke_credential(self, key_id: str) -> None:
         with self._tx(is_admin=True) as conn, conn.cursor() as cur:
             cur.execute("UPDATE api_credentials SET revoked=TRUE WHERE key_id=%s",
                         (key_id,))
+
+    def delete_credential(self, key_id: str) -> bool:
+        with self._tx(is_admin=True) as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM api_credentials WHERE key_id=%s", (key_id,))
+            return cur.rowcount > 0
 
     # -- audit --
     def log(self, actor: str, action: str, account_id: str | None = None,

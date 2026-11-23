@@ -6,9 +6,10 @@ from httpx import HTTPError as BackendDown
 from ..a2ui import build_audit_surface, build_chat_surface, extract_a2ui_from_text, merge_surfaces
 from ..audit import answer_audit, get_audit_events_for_surface
 from ..deps import authed, resolve_scope
-from ..rag import build_prompt, retrieve, triage_question
+from ..rag import build_prompt, build_smalltalk_prompt, is_smalltalk, retrieve, triage_question
 from ..schemas import ChatIn, ChatOut
 from ..store import Scope, User
+from ..triage import Triage
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 EXPIRY_NOTICE = (" Note: your previous session context expired after 30 minutes"
@@ -59,8 +60,19 @@ def chat(body: ChatIn, request: Request, user: User = Depends(authed)):
                                  log=lambda m: c["store"].log(
                                      actor="system", action="triage_fallback",
                                      account_id=scope.account_id, detail=m))
-        chunks = retrieve(c["ollama"], c["store"], scope, body.question)
-        answer = c["ollama"].generate(build_prompt(body.question, chunks, history))
+        # Casual smalltalk stays natural and never hits retrieval/vectors,
+        # so isolation is never exercised and no FAQ formatting is imposed.
+        if is_smalltalk(body.question):
+            chunks: list[dict] = []
+            # keep triage category (general) but suppress escalation/dept for smalltalk
+            triage = Triage(category="general", escalate=False, department=None)
+            answer = c["ollama"].generate(build_smalltalk_prompt(body.question, history))
+        else:
+            chunks = retrieve(c["ollama"], c["store"], scope, body.question)
+            # FAQ style for account-scoped RAG only; internal (account_id is None)
+            # and audit (handled above) keep the plain grounded prompt.
+            use_faq = scope.account_id is not None
+            answer = c["ollama"].generate(build_prompt(body.question, chunks, history, faq=use_faq))
     except PermissionError:
         raise HTTPException(403, "session belongs to another user or account")
     except BackendDown:

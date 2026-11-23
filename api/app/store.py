@@ -310,15 +310,31 @@ class InMemoryStore:
                 for _, c in scored[:limit]]
 
     # -- external credentials --
-    def issue_credential(self, account_id: str, secret_hash: str) -> str:
+    def issue_credential(self, account_id: str, secret_hash: str,
+                         label: str | None = None, expires_in_days: int | None = None) -> str:
         key_id = "sk_" + secrets.token_urlsafe(9)
+        from datetime import timedelta
+        days = expires_in_days or 90
+        exp = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
         self.credentials[key_id] = {"key_id": key_id, "account_id": account_id,
                                     "secret_hash": secret_hash, "revoked": False,
+                                    "label": label, "expires_at": exp,
                                     "created_at": _now()}
         return key_id
 
     def get_credential(self, key_id: str) -> dict | None:
         return self.credentials.get(key_id)
+
+    def list_credentials(self, account_id: str) -> list[dict]:
+        rows = [
+            {"key_id": c["key_id"], "account_id": c["account_id"],
+             "revoked": c["revoked"], "label": c.get("label"),
+             "expires_at": c.get("expires_at"), "created_at": c["created_at"]}
+            for c in self.credentials.values()
+            if c["account_id"] == account_id
+        ]
+        rows.sort(key=lambda r: r["created_at"] or "", reverse=True)
+        return rows
 
     def rotate_credential(self, key_id: str, new_hash: str) -> dict:
         c = self.credentials[key_id]
@@ -328,6 +344,18 @@ class InMemoryStore:
 
     def revoke_credential(self, key_id: str) -> None:
         self.credentials[key_id]["revoked"] = True
+
+    def delete_credential(self, key_id: str) -> bool:
+        return self.credentials.pop(key_id, None) is not None
+
+    def _cred_expired(self, cred: dict) -> bool:
+        exp = cred.get("expires_at")
+        if not exp:
+            return False
+        try:
+            return datetime.fromisoformat(exp) <= datetime.now(timezone.utc)
+        except Exception:
+            return False
 
     # -- audit --
     def log(self, actor: str, action: str, account_id: str | None = None,
